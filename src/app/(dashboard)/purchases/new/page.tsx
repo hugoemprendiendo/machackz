@@ -8,7 +8,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ChevronLeft, PlusCircle, Trash2, Wand2, Loader2, UploadCloud } from "lucide-react";
 import { format, parse } from "date-fns";
-
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -46,6 +45,7 @@ const purchaseItemSchema = z.object({
   itemId: z.string().min(1, "Selecciona un producto."),
   quantity: z.coerce.number().int().min(1, "La cantidad debe ser al menos 1."),
   unitCost: z.coerce.number().min(0, "El costo debe ser positivo."),
+  itemNameFromAI: z.string().optional(), // To hold the name from AI if not found
 });
 
 const purchaseFormSchema = z.object({
@@ -61,16 +61,17 @@ function findClosestMatch(name: string, list: {id: string, name: string}[]) {
     if (!name || list.length === 0) return null;
     const lowerCaseName = name.toLowerCase().trim();
     let bestMatch = null;
-    let highestScore = 0;
+    let highestScore = -1;
 
     list.forEach(item => {
         const itemNameLower = item.name.toLowerCase().trim();
-        // Simple scoring: bigger score for exact match, smaller for inclusion
         let score = 0;
+        
         if (itemNameLower === lowerCaseName) {
             score = 100;
         } else if (itemNameLower.includes(lowerCaseName) || lowerCaseName.includes(itemNameLower)) {
-            score = 50;
+            const lengthDifference = Math.abs(itemNameLower.length - lowerCaseName.length);
+            score = 50 - lengthDifference;
         }
         
         if (score > highestScore) {
@@ -155,31 +156,35 @@ export default function NewPurchasePage() {
               contentType: invoiceFile.type,
             });
             
+            // Set invoice number and date
             form.setValue("invoiceNumber", result.invoiceNumber);
-            
             try {
                 const parsedDate = parse(result.date, 'yyyy-MM-dd', new Date());
                 if (!isNaN(parsedDate.getTime())) {
                     form.setValue("date", format(parsedDate, "yyyy-MM-dd"));
+                } else {
+                   console.warn("Could not parse date from AI, leaving default.")
                 }
             } catch (e) {
                 console.error("Could not parse date from AI, leaving default.", e)
             }
 
-
+            // Find and set supplier
             const supplierId = findClosestMatch(result.supplierName, suppliers);
             if (supplierId) {
                 form.setValue("supplierId", supplierId);
             } else {
-                 toast({ variant: 'destructive', title: "Proveedor no encontrado", description: `No se pudo encontrar un proveedor que coincida con "${result.supplierName}". Por favor, selecciónalo manualmente.` });
+                 toast({ variant: 'destructive', title: "Proveedor no encontrado", description: `No se pudo encontrar un proveedor que coincida con "${result.supplierName}". Por favor, selecciónalo o créalo manualmente.` });
             }
 
+            // Process items
             const newItems = result.items.map(item => {
                 const existingProductId = findClosestMatch(item.name, inventory);
                 return {
                     itemId: existingProductId || "",
                     quantity: item.quantity,
                     unitCost: item.unitCost,
+                    itemNameFromAI: existingProductId ? undefined : item.name,
                 }
             });
             replace(newItems);
@@ -198,7 +203,6 @@ export default function NewPurchasePage() {
         toast({ variant: "destructive", title: "Error de Lectura", description: "No se pudo leer el archivo seleccionado." });
     }
   };
-
 
   const onSubmit = (data: PurchaseFormValues) => {
     const supplier = suppliers.find(s => s.id === data.supplierId);
@@ -240,11 +244,20 @@ export default function NewPurchasePage() {
   
   React.useEffect(() => {
     if (lastCreatedProduct) {
-        append({ itemId: lastCreatedProduct.id, quantity: 1, unitCost: lastCreatedProduct.costPrice });
+        // Find the first item that doesn't have an itemId and might match the created product
+        const itemIndexToUpdate = watchedItems.findIndex(item => !item.itemId && item.itemNameFromAI?.toLowerCase() === lastCreatedProduct.name.toLowerCase());
+        if (itemIndexToUpdate !== -1) {
+            form.setValue(`items.${itemIndexToUpdate}.itemId`, lastCreatedProduct.id);
+            form.setValue(`items.${itemIndexToUpdate}.itemNameFromAI`, undefined);
+            form.setValue(`items.${itemIndexToUpdate}.unitCost`, lastCreatedProduct.costPrice);
+        } else {
+             append({ itemId: lastCreatedProduct.id, quantity: 1, unitCost: lastCreatedProduct.costPrice });
+        }
+       
         form.trigger('items');
         setLastCreatedProduct(null);
     }
-  }, [lastCreatedProduct, append, form]);
+  }, [lastCreatedProduct, append, form, watchedItems]);
   
   const physicalInventory = React.useMemo(() => inventory.filter(i => !i.isService), [inventory]);
   
@@ -351,7 +364,7 @@ export default function NewPurchasePage() {
                   const item = form.watch(`items.${index}`);
                   const product = inventory.find(p => p.id === item.itemId);
                   const itemSubtotal = (item.quantity || 0) * (item.unitCost || 0);
-                  const itemTax = product?.hasTax ? itemSubtotal * (product.taxRate / 100) : 0;
+                  const itemTax = product?.hasTax ? itemSubtotal * ((product.taxRate || 0) / 100) : 0;
                   
                   return (
                   <TableRow key={field.id}>
@@ -372,6 +385,7 @@ export default function NewPurchasePage() {
                                </Select>
                             )}
                         />
+                       {item.itemNameFromAI && <p className="text-xs text-amber-600 mt-1">Sugerencia IA: "{item.itemNameFromAI}". Créalo o elige uno existente.</p>}
                        {form.formState.errors.items?.[index]?.itemId && <p className="text-sm text-destructive mt-1">{form.formState.errors.items?.[index]?.itemId?.message}</p>}
                     </TableCell>
                     <TableCell>
@@ -440,5 +454,4 @@ export default function NewPurchasePage() {
     </div>
   );
 }
-
     
