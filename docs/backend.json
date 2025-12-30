@@ -1,0 +1,51 @@
+{
+  "entities": {
+    "Greeting": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Greeting",
+      "type": "object",
+      "description": "Represents a simple greeting to be displayed in the application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Greeting entity."
+        },
+        "text": {
+          "type": "string",
+          "description": "The text of the greeting. In this case, it will be 'Hola'."
+        }
+      },
+      "required": [
+        "id",
+        "text"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/greetings/{greetingId}",
+        "definition": {
+          "entityName": "Greeting",
+          "schema": {
+            "$ref": "#/backend/entities/Greeting"
+          },
+          "description": "Collection to store the greeting message.  The document ID is used as the greetingId. This collection contains a single document with the greeting text.",
+          "params": [
+            {
+              "name": "greetingId",
+              "description": "The unique identifier of the greeting document."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "Given the simplicity of the 'HelloDisplay' app, which only needs to display a static greeting, the Firestore structure is straightforward. A single collection, 'greetings', is used to store the greeting data.  This collection will contain a single document. No user-specific data or authorization is needed, so no user collections or complex access control is required. This design prioritizes simplicity and efficiency, which are key given the limited scope of the app. The app shows a static text, so the read access can be open to everyone, removing the necessity to check roles or owners. Therefore, authorization independence does not play a role. QAPs are not relevant, due to the lack of list operations and the limited data set."
+  }
+}

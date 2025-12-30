@@ -1,0 +1,71 @@
+/**
+ * This ruleset enforces a public, read-only security model for the application's data.
+ *
+ * Core Philosophy:
+ * The primary goal is to serve static, public content to all users, regardless of
+ * their authentication status. All client-side write operations are explicitly disabled
+ * to protect the integrity of this static data.
+ *
+ * Data Structure:
+ * All data is stored in a single top-level collection: /greetings. This collection
+ * is intended to hold a small number of documents that can be read by the client application.
+ *
+ * Key Security Decisions:
+ * - Public Read Access: Any user, including unauthenticated visitors, can read documents
+ *   from the /greetings collection. This is essential for the app's function of displaying
+ *   a static message.
+ * - All Writes Disabled: To maintain the static nature of the content and prevent
+ *   unauthorized modifications, all create, update, and delete operations from clients
+ *   are denied. Content should only be managed through a trusted environment like the
+ *   Firebase Console or the Admin SDK.
+ *
+ * Denormalization for Authorization:
+ * Not applicable in this simple model, as there are no user-specific permissions or
+ * relationships that require denormalization.
+ *
+ * Structural Segregation:
+ * Not applicable, as all data is intended to be public. There is no private or
+ * user-specific data to segregate.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------------
+    // Helper Functions
+    // ------------------------------------------------------------------------
+
+    /**
+     * isSignedIn
+     * @description Checks if the user is authenticated.
+     * @returns {boolean} True if a user is signed in.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+
+    // ------------------------------------------------------------------------
+    // Collection Rules
+    // ------------------------------------------------------------------------
+
+    /**
+     * @description Rules for the public 'greetings' collection. This collection holds static, public content.
+     * @path /greetings/{greetingId}
+     * @allow A public, unauthenticated user can read a greeting: `(get) /greetings/welcome`.
+     * @deny Any user, authenticated or not, is denied from writing to the collection: `(create) /greetings/newGreeting`.
+     * @principle Serves public, read-only data. All client-side write operations are disabled to protect static content.
+     */
+    match /greetings/{greetingId} {
+      // READ: Anyone can read greetings.
+      allow get: if true;
+      allow list: if true;
+
+      // WRITE: No one can write to the greetings collection from the client.
+      // This data is static and should only be changed via the Firebase Console or Admin SDK.
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

@@ -1,3 +1,28 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "user1",
+      "description": "Avatar for Juan Perez",
+      "imageUrl": "https://images.unsplash.com/photo-1531891437562-4301cf35b7e4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxtYWxlJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzY1Mjc5OTI2fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "male portrait"
+    },
+    {
+      "id": "user2",
+      "description": "Avatar for Maria Garcia",
+      "imageUrl": "https://images.unsplash.com/photo-1524255684952-d7185b509571?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxmZW1hbGUlMjBwb3J0cmFpdHxlbnwwfHx8fDE3NjUyODUyNDR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "female portrait"
+    },
+    {
+      "id": "user3",
+      "description": "Avatar for Carlos Sanchez",
+      "imageUrl": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8bWFsZSUyMHByb2ZpbGV8ZW58MHx8fHwxNzY1MjkwMDk2fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "male profile"
+    },
+    {
+      "id": "hero",
+      "description": "Dashboard hero image",
+      "imageUrl": "https://images.unsplash.com/photo-1581092334651-ddf26d9a09d0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHx0ZWNoJTIwd29ya3Nob3B8ZW58MHx8fHwxNzY1MjEzMjU2fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "tech workshop"
+    }
+  ]
 }

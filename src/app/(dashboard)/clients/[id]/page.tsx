@@ -1,0 +1,191 @@
+
+"use client";
+
+import { useRouter, useParams } from "next/navigation";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { ChevronLeft } from "lucide-react";
+import React from "react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { useDataContext } from "@/context/data-context";
+import Link from "next/link";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const clientFormSchema = z.object({
+  name: z.string().min(2, "El nombre es requerido."),
+  email: z.string().email("Por favor ingresa un email válido.").optional().or(z.literal('')),
+  countryCode: z.string(),
+  phone: z.string().min(8, "El teléfono debe tener al menos 8 dígitos."),
+  address: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+type ClientFormValues = z.infer<typeof clientFormSchema>;
+
+const countryCodes = ['+52', '+1', '+34', '+54', '+57', '+56'];
+
+// Helper to extract country code and phone number
+const parsePhoneNumber = (fullPhoneNumber: string | undefined) => {
+    if (!fullPhoneNumber) return { countryCode: '+52', phone: '' };
+    
+    const parts = fullPhoneNumber.split(' ');
+    if (parts.length > 1 && parts[0].startsWith('+')) {
+        const code = parts[0];
+        const number = parts.slice(1).join(' ');
+        if (countryCodes.includes(code)) {
+            return { countryCode: code, phone: number };
+        }
+    }
+    
+    // Fallback for numbers without a recognizable country code
+    for (const code of countryCodes) {
+        if (fullPhoneNumber.startsWith(code)) {
+            return { countryCode: code, phone: fullPhoneNumber.substring(code.length).trim() };
+        }
+    }
+    
+    return { countryCode: '+52', phone: fullPhoneNumber };
+};
+
+export default function EditClientPage() {
+  const router = useRouter();
+  const params = useParams();
+  const { toast } = useToast();
+  const { clients, updateClient } = useDataContext();
+  
+  const client = React.useMemo(() => clients.find((c) => c.id === params.id), [clients, params.id]);
+
+  const form = useForm<ClientFormValues>({
+    resolver: zodResolver(clientFormSchema),
+  });
+  
+  React.useEffect(() => {
+    if (client) {
+      const { countryCode, phone } = parsePhoneNumber(client.phone);
+      form.reset({
+          ...client,
+          countryCode,
+          phone,
+      });
+    }
+  }, [client, form]);
+
+  const onSubmit = async (data: ClientFormValues) => {
+    if (!client) return;
+    await updateClient({
+      id: client.id,
+      name: data.name,
+      phone: `${data.countryCode} ${data.phone}`,
+      email: data.email || '',
+      address: data.address || '',
+      notes: data.notes,
+    });
+    toast({
+      title: "Cliente Actualizado",
+      description: `La información del cliente ${data.name} ha sido actualizada.`,
+    });
+    router.push("/clients");
+  };
+
+  if (!client) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center">
+        <h1 className="text-4xl font-bold">Cliente no encontrado</h1>
+        <p className="text-muted-foreground">El cliente que buscas no existe o ha sido eliminado.</p>
+        <Button asChild className="mt-4">
+          <Link href="/clients">Volver a Clientes</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="flex items-center gap-4">
+        <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => router.back()}>
+          <ChevronLeft className="h-4 w-4" />
+          <span className="sr-only">Volver</span>
+        </Button>
+        <h1 className="flex-1 shrink-0 whitespace-nowrap text-xl font-headline font-semibold tracking-tight sm:grow-0">
+          Editar Cliente
+        </h1>
+        <div className="flex items-center gap-2 ml-auto">
+            <Button type="button" variant="outline" onClick={() => router.push('/clients')}>Cancelar</Button>
+            <Button type="submit" form="client-edit-form">Guardar Cambios</Button>
+        </div>
+      </div>
+      <form id="client-edit-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Información del Cliente</CardTitle>
+            <CardDescription>
+              Actualiza los datos del cliente.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nombre Completo</Label>
+              <Input id="name" {...form.register("name")} placeholder="Ej. Juan Perez" />
+              {form.formState.errors.name && <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>}
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="phone">Teléfono</Label>
+                <div className="flex gap-2">
+                    <Controller
+                        control={form.control}
+                        name="countryCode"
+                        render={({ field }) => (
+                            <Select onValueChange={field.onChange} value={field.value}>
+                                <SelectTrigger className="w-[80px]">
+                                <SelectValue placeholder="+52" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                {countryCodes.map(code => (
+                                    <SelectItem key={code} value={code}>{code}</SelectItem>
+                                ))}
+                                </SelectContent>
+                            </Select>
+                        )}
+                    />
+                    <Input id="phone" {...form.register("phone")} placeholder="Ej. 55 1234 5678" className="flex-1"/>
+                </div>
+                {form.formState.errors.phone && <p className="text-sm text-destructive">{form.formState.errors.phone.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email (Opcional)</Label>
+              <Input id="email" type="email" {...form.register("email")} placeholder="Ej. juan.perez@example.com" />
+              {form.formState.errors.email && <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="address">Dirección (Opcional)</Label>
+              <Input id="address" {...form.register("address")} placeholder="Ej. Calle Falsa 123, Springfield" />
+              {form.formState.errors.address && <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notas Adicionales</Label>
+              <Textarea
+                id="notes"
+                {...form.register("notes")}
+                placeholder="Cualquier nota relevante sobre el cliente..."
+                rows={3}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </form>
+    </div>
+  );
+}

@@ -1,0 +1,434 @@
+
+{
+  "entities": {
+    "Expense": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Expense",
+      "type": "object",
+      "description": "Represents a business expense record.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the expense."
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief description of the expense."
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of the expense (e.g., Rent, Utilities, Salaries)."
+        },
+        "supplierId": {
+          "type": "string",
+          "description": "Reference to Supplier. (Relationship: Supplier 1:N Expense)"
+        },
+        "supplierName": {
+          "type": "string",
+          "description": "Name of the supplier (denormalized)."
+        },
+        "invoiceNumber": {
+          "type": "string",
+          "description": "Invoice or reference number for the expense."
+        },
+        "date": {
+          "type": "string",
+          "description": "Date the expense was incurred.",
+          "format": "date-time"
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "Total amount of the expense."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional notes about the expense."
+        }
+      },
+      "required": [
+        "id",
+        "description",
+        "category",
+        "supplierId",
+        "supplierName",
+        "date",
+        "totalAmount"
+      ]
+    },
+    "Inventory": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Inventory",
+      "type": "object",
+      "description": "Represents a product or part in the inventory.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the inventory item."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the product."
+        },
+        "category": {
+          "type": "string",
+          "description": "Category of the product (e.g., Storage, Screens)."
+        },
+        "sku": {
+          "type": "string",
+          "description": "Unique Stock Keeping Unit code."
+        },
+        "costPrice": {
+          "type": "number",
+          "description": "Cost price of the product from the supplier."
+        },
+        "sellingPrice": {
+          "type": "number",
+          "description": "Selling price of the product to the customer."
+        },
+        "stock": {
+          "type": "number",
+          "description": "Current quantity in stock."
+        },
+        "minStock": {
+          "type": "number",
+          "description": "Minimum stock quantity for reorder alerts."
+        },
+        "hasTax": {
+          "type": "boolean",
+          "description": "Indicates if the product has tax."
+        },
+        "taxRate": {
+          "type": "number",
+          "description": "The tax rate for the product."
+        },
+        "isService": {
+            "type": "boolean",
+            "description": "Indicates if the item is a service and not a physical product to be inventoried."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "category",
+        "sku",
+        "costPrice",
+        "sellingPrice",
+        "stock",
+        "minStock",
+        "hasTax",
+        "taxRate",
+        "isService"
+      ]
+    },
+    "Client": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Client",
+      "type": "object",
+      "description": "Represents a customer of the repair shop.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the client."
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the client."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the client.",
+          "format": "email"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Phone number of the client."
+        },
+        "address": {
+          "type": "string",
+          "description": "Physical address of the client."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Additional notes about the client."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "email",
+        "phone",
+        "address"
+      ]
+    },
+    "Supplier": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Supplier",
+      "type": "object",
+      "description": "Represents a company that supplies goods.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the supplier."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the company."
+        },
+        "contactName": {
+          "type": "string",
+          "description": "Name of the contact person at the supplier."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the supplier.",
+          "format": "email"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Phone number of the supplier."
+        },
+        "taxId": {
+          "type": "string",
+          "description": "Tax identification number of the supplier."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "contactName",
+        "email",
+        "phone",
+        "taxId"
+      ]
+    },
+    "Order": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Order",
+      "type": "object",
+      "description": "Represents a repair service order.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the order."
+        },
+        "customerId": {
+          "type": "string",
+          "description": "Reference to Client. (Relationship: Client 1:N Order)"
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Name of the customer (denormalized for quick access)."
+        },
+        "contactInfo": {
+          "type": "string",
+          "description": "Phone or email for quick contact."
+        },
+        "deviceType": {
+          "type": "string",
+          "description": "Type of device (Laptop, Cellphone, etc.)."
+        },
+        "deviceModel": {
+          "type": "string",
+          "description": "Specific model of the device."
+        },
+        "problemDescription": {
+          "type": "string",
+          "description": "Fault reported by the customer."
+        },
+        "diagnosis": {
+          "type": "string",
+          "description": "Technical diagnosis (AI-generated or manual)."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the order (Open, In Progress, Waiting for Parts, Ready for Delivery, Delivered/Closed, Canceled)."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Date and time of order creation.",
+          "format": "date-time"
+        },
+        "closedAt": {
+          "type": "string",
+          "description": "Date and time of order closure.",
+          "format": "date-time"
+        },
+        "parts": {
+          "type": "array",
+          "description": "List of parts used in the repair.",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "customerId",
+        "customerName",
+        "contactInfo",
+        "deviceType",
+        "deviceModel",
+        "problemDescription",
+        "diagnosis",
+        "status",
+        "createdAt",
+        "parts"
+      ]
+    },
+    "StockEntry": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "StockEntry",
+      "type": "object",
+      "description": "Represents a stock entry or purchase history.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the stock entry."
+        },
+        "supplierId": {
+          "type": "string",
+          "description": "Reference to Supplier. (Relationship: Supplier 1:N StockEntry)"
+        },
+        "supplierName": {
+          "type": "string",
+          "description": "Name of the supplier."
+        },
+        "invoiceNumber": {
+          "type": "string",
+          "description": "Invoice number for the purchase."
+        },
+        "date": {
+          "type": "string",
+          "description": "Date of the purchase.",
+          "format": "date-time"
+        },
+        "totalCost": {
+          "type": "number",
+          "description": "Total cost of the invoice."
+        },
+        "items": {
+          "type": "array",
+          "description": "List of items purchased.",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "supplierId",
+        "supplierName",
+        "invoiceNumber",
+        "date",
+        "totalCost",
+        "items"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "expenses/{expenseId}",
+        "definition": {
+          "entityName": "Expense",
+          "schema": {
+            "$ref": "#/backend/entities/Expense"
+          },
+          "description": "Stores business expense records.",
+          "params": [
+            {
+              "name": "expenseId",
+              "description": "Unique identifier for the expense."
+            }
+          ]
+        }
+      },
+      {
+        "path": "inventory/{inventoryId}",
+        "definition": {
+          "entityName": "Inventory",
+          "schema": {
+            "$ref": "#/backend/entities/Inventory"
+          },
+          "description": "Stores information about each product or part in the inventory.",
+          "params": [
+            {
+              "name": "inventoryId",
+              "description": "Unique identifier for the inventory item."
+            }
+          ]
+        }
+      },
+      {
+        "path": "clients/{clientId}",
+        "definition": {
+          "entityName": "Client",
+          "schema": {
+            "$ref": "#/backend/entities/Client"
+          },
+          "description": "Stores information about clients.",
+          "params": [
+            {
+              "name": "clientId",
+              "description": "Unique identifier for the client."
+            }
+          ]
+        }
+      },
+      {
+        "path": "suppliers/{supplierId}",
+        "definition": {
+          "entityName": "Supplier",
+          "schema": {
+            "$ref": "#/backend/entities/Supplier"
+          },
+          "description": "Stores information about suppliers.",
+          "params": [
+            {
+              "name": "supplierId",
+              "description": "Unique identifier for the supplier."
+            }
+          ]
+        }
+      },
+      {
+        "path": "orders/{orderId}",
+        "definition": {
+          "entityName": "Order",
+          "schema": {
+            "$ref": "#/backend/entities/Order"
+          },
+          "description": "Stores information about repair orders. Includes denormalized 'customerName' for faster access.",
+          "params": [
+            {
+              "name": "orderId",
+              "description": "Unique identifier for the order."
+            }
+          ]
+        }
+      },
+      {
+        "path": "stockEntries/{stockEntryId}",
+        "definition": {
+          "entityName": "StockEntry",
+          "schema": {
+            "$ref": "#/backend/entities/StockEntry"
+          },
+          "description": "Stores records of stock entries/purchases. Includes denormalized 'supplierName' for faster access.",
+          "params": [
+            {
+              "name": "stockEntryId",
+              "description": "Unique identifier for the stock entry."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to manage a repair shop's operations, focusing on inventory, clients, suppliers, orders, and stock entries. The design emphasizes authorization independence and efficient data retrieval, adhering to the principles of DBAC (Database-Based Access Control) and QAPs (Queries Are Not Filters).\n\n**Authorization Independence:**  For the collaborative entities, a 'members' map strategy is employed, denormalizing access control data directly into the documents themselves. This avoids the need for complex `get()` calls in security rules, enabling atomic operations and improving security rule evaluation performance. For entities owned by a single user, a path-based approach is used, where the document is located under the user's document.\n\n**QAPs (Queries Are Not Filters):** The structure supports secure `list` operations through structural segregation and predictable data models.  Each top-level collection (`inventory`, `clients`, `suppliers`, `orders`, `stockEntries`) houses documents with uniform security requirements, simplifying rules and preventing unintended data exposure. The structure facilitates filtering and indexing as required by the prompt.\n\n*   Orders can be filtered by 'status' and date ranges ('createdAt', 'closedAt').\n*   Inventory can be filtered where 'stock' is less than or equal to 'minStock'.\n*   Clients can be searched by name using client-side or server-side search techniques as appropriate.\n\n**Denormalization**: The 'customerName' field within the 'orders' collection and the 'supplierName' field within the 'stockEntries' collection serve as denormalized data, improving query performance by avoiding joins across collections. It also facilitates authorization independence. Part details within the order are also denormalized, including `itemId`, `name`, `quantity`, `unitPrice` and `unitCost`.\n\n**Ownership**: The `orders` collection includes a `customerId` to establish a clear link to the client who created the order. The `stockEntries` collection includes a `supplierId` field which establish a clear link to the `suppliers` collection.\n\n**Invariants**: The structure supports the integrity of data through explicit state modeling using the `status` field in the `orders` collection and adheres to semantic naming conventions for all fields and collections."
+  }
+}
