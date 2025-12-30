@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ChevronLeft, PlusCircle, Trash2 } from "lucide-react";
-import { format } from "date-fns";
+import { ChevronLeft, PlusCircle, Trash2, Wand2, Loader2, UploadCloud } from "lucide-react";
+import { format, parse } from "date-fns";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +40,7 @@ import { useDataContext } from "@/context/data-context";
 import { cn } from "@/lib/utils";
 import { NewProductDialog } from "@/components/inventory/new-product-dialog";
 import type { InventoryItem } from "@/lib/types";
+import { extractInvoiceDetails } from "@/ai/flows/extract-invoice-details";
 
 const purchaseItemSchema = z.object({
   itemId: z.string().min(1, "Selecciona un producto."),
@@ -56,12 +57,23 @@ const purchaseFormSchema = z.object({
 
 type PurchaseFormValues = z.infer<typeof purchaseFormSchema>;
 
+function findClosestSupplier(name: string, suppliers: {id: string, name: string}[]) {
+    if (!name || suppliers.length === 0) return null;
+    const lowerCaseName = name.toLowerCase();
+    // Simple match: check for inclusion
+    const found = suppliers.find(s => s.name.toLowerCase().includes(lowerCaseName) || lowerCaseName.includes(s.name.toLowerCase()));
+    return found ? found.id : null;
+}
+
 export default function NewPurchasePage() {
   const router = useRouter();
   const { toast } = useToast();
   const { suppliers, inventory, addStockEntry, updateInventoryStock } = useDataContext();
   const [isProductDialogOpen, setProductDialogOpen] = React.useState(false);
   const [lastCreatedProduct, setLastCreatedProduct] = React.useState<InventoryItem | null>(null);
+  const [isAiLoading, setIsAiLoading] = React.useState(false);
+  const [invoiceFile, setInvoiceFile] = React.useState<File | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   
   const form = useForm<PurchaseFormValues>({
     resolver: zodResolver(purchaseFormSchema),
@@ -71,7 +83,7 @@ export default function NewPurchasePage() {
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, replace } = useFieldArray({
     control: form.control,
     name: "items",
   });
@@ -91,6 +103,65 @@ export default function NewPurchasePage() {
 
       return { ...calculated, totalCost: calculated.subtotal + calculated.taxTotal };
   }, [watchedItems, inventory]);
+  
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setInvoiceFile(event.target.files[0]);
+    }
+  };
+
+  const handleAnalyzeInvoice = async () => {
+    if (!invoiceFile) {
+        toast({ variant: "destructive", title: "No hay archivo", description: "Por favor, selecciona un archivo de factura." });
+        return;
+    }
+    setIsAiLoading(true);
+
+    const reader = new FileReader();
+    reader.readAsDataURL(invoiceFile);
+    reader.onload = async () => {
+        const dataUri = reader.result as string;
+        try {
+            const result = await extractInvoiceDetails({ invoiceImageDataUri: dataUri });
+            
+            form.setValue("invoiceNumber", result.invoiceNumber);
+            
+            const parsedDate = parse(result.date, 'yyyy-MM-dd', new Date());
+            if (!isNaN(parsedDate.getTime())) {
+                form.setValue("date", format(parsedDate, "yyyy-MM-dd"));
+            }
+
+            const supplierId = findClosestSupplier(result.supplierName, suppliers);
+            if (supplierId) {
+                form.setValue("supplierId", supplierId);
+            } else {
+                 toast({ variant: 'destructive', title: "Proveedor no encontrado", description: `No se pudo encontrar un proveedor que coincida con "${result.supplierName}". Por favor, selecciónalo manualmente.` });
+            }
+
+            const newItems = result.items.map(item => {
+                const existingProduct = inventory.find(p => p.name.toLowerCase() === item.name.toLowerCase());
+                return {
+                    itemId: existingProduct?.id || "",
+                    quantity: item.quantity,
+                    unitCost: item.unitCost,
+                }
+            });
+            replace(newItems);
+            
+            toast({ title: "Factura Analizada", description: "El formulario ha sido rellenado con los datos de la factura." });
+
+        } catch (error) {
+            console.error("AI Invoice Analysis Error:", error);
+            toast({ variant: "destructive", title: "Error de IA", description: "No se pudo analizar la factura. Inténtalo de nuevo." });
+        } finally {
+            setIsAiLoading(false);
+        }
+    };
+    reader.onerror = () => {
+        setIsAiLoading(false);
+        toast({ variant: "destructive", title: "Error de Lectura", description: "No se pudo leer el archivo seleccionado." });
+    }
+  };
 
 
   const onSubmit = (data: PurchaseFormValues) => {
@@ -141,7 +212,6 @@ export default function NewPurchasePage() {
   
   const physicalInventory = React.useMemo(() => inventory.filter(i => !i.isService), [inventory]);
   
-
   return (
     <div className="flex flex-col gap-8">
       <div className="flex items-center gap-4">
@@ -157,6 +227,34 @@ export default function NewPurchasePage() {
             <Button type="submit" form="purchase-new-form">Guardar Compra</Button>
         </div>
       </div>
+       <Card>
+        <CardHeader>
+            <CardTitle>Análisis con IA</CardTitle>
+            <CardDescription>Sube una imagen de tu factura y deja que la IA rellene los campos por ti.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid md:grid-cols-2 gap-6 items-center">
+            <div 
+                className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-muted rounded-lg cursor-pointer hover:border-primary transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+            >
+                <UploadCloud className="w-10 h-10 text-muted-foreground"/>
+                <p className="mt-2 text-sm text-muted-foreground">
+                    {invoiceFile ? `Archivo: ${invoiceFile.name}` : "Haz clic o arrastra para subir la factura"}
+                </p>
+                <Input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                />
+            </div>
+            <Button type="button" onClick={handleAnalyzeInvoice} disabled={isAiLoading || !invoiceFile}>
+                {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Wand2 className="mr-2 h-4 w-4"/>}
+                {isAiLoading ? 'Analizando...' : 'Analizar Factura'}
+            </Button>
+        </CardContent>
+      </Card>
       <form id="purchase-new-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <Card>
             <CardHeader>
@@ -169,7 +267,7 @@ export default function NewPurchasePage() {
                         control={form.control}
                         name="supplierId"
                         render={({ field }) => (
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value}>
                                 <SelectTrigger>
                                 <SelectValue placeholder="Seleccionar proveedor..." />
                                 </SelectTrigger>
@@ -306,7 +404,3 @@ export default function NewPurchasePage() {
     </div>
   );
 }
-
-    
-
-    
