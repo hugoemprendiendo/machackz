@@ -44,18 +44,14 @@ const prompt = ai.definePrompt({
   output: {schema: InvoiceDetailsOutputSchema},
   prompt: `You are an expert at extracting structured data from documents.
 Analyze the following invoice data, which could be from an image or an XML file.
+If the data starts with 'data:image', it's an image. Otherwise, it's likely XML.
 Extract the supplier's name, the invoice number, the date, and a list of all line items.
 For each line item, provide its name/description, quantity, and the unit cost/price.
 The date should be formatted as YYYY-MM-DD.
 
 Invoice Data:
-{{#if (startsWith invoiceData "data:image")}}
-  {{media url=invoiceData}}
-{{else}}
-  \`\`\`xml
-  {{{invoiceData}}}
-  \`\`\`
-{{/if}}
+{{media url=invoiceData}}
+{{{invoiceData}}}
 `,
 });
 
@@ -70,5 +66,3 @@ const extractInvoiceDetailsFlow = ai.defineFlow(
     return output!;
   }
 );
-
-    
