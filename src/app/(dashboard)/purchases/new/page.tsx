@@ -57,12 +57,29 @@ const purchaseFormSchema = z.object({
 
 type PurchaseFormValues = z.infer<typeof purchaseFormSchema>;
 
-function findClosestSupplier(name: string, suppliers: {id: string, name: string}[]) {
-    if (!name || suppliers.length === 0) return null;
-    const lowerCaseName = name.toLowerCase();
-    // Simple match: check for inclusion
-    const found = suppliers.find(s => s.name.toLowerCase().includes(lowerCaseName) || lowerCaseName.includes(s.name.toLowerCase()));
-    return found ? found.id : null;
+function findClosestMatch(name: string, list: {id: string, name: string}[]) {
+    if (!name || list.length === 0) return null;
+    const lowerCaseName = name.toLowerCase().trim();
+    let bestMatch = null;
+    let highestScore = 0;
+
+    list.forEach(item => {
+        const itemNameLower = item.name.toLowerCase().trim();
+        // Simple scoring: bigger score for exact match, smaller for inclusion
+        let score = 0;
+        if (itemNameLower === lowerCaseName) {
+            score = 100;
+        } else if (itemNameLower.includes(lowerCaseName) || lowerCaseName.includes(itemNameLower)) {
+            score = 50;
+        }
+        
+        if (score > highestScore) {
+            highestScore = score;
+            bestMatch = item.id;
+        }
+    });
+
+    return bestMatch;
 }
 
 export default function NewPurchasePage() {
@@ -135,17 +152,22 @@ export default function NewPurchasePage() {
         try {
             const result = await extractInvoiceDetails({
               invoiceData: fileContent,
-              contentType: isImage ? invoiceFile.type : 'text/plain', // Pass content type
+              contentType: invoiceFile.type,
             });
             
             form.setValue("invoiceNumber", result.invoiceNumber);
             
-            const parsedDate = parse(result.date, 'yyyy-MM-dd', new Date());
-            if (!isNaN(parsedDate.getTime())) {
-                form.setValue("date", format(parsedDate, "yyyy-MM-dd"));
+            try {
+                const parsedDate = parse(result.date, 'yyyy-MM-dd', new Date());
+                if (!isNaN(parsedDate.getTime())) {
+                    form.setValue("date", format(parsedDate, "yyyy-MM-dd"));
+                }
+            } catch (e) {
+                console.error("Could not parse date from AI, leaving default.", e)
             }
 
-            const supplierId = findClosestSupplier(result.supplierName, suppliers);
+
+            const supplierId = findClosestMatch(result.supplierName, suppliers);
             if (supplierId) {
                 form.setValue("supplierId", supplierId);
             } else {
@@ -153,9 +175,9 @@ export default function NewPurchasePage() {
             }
 
             const newItems = result.items.map(item => {
-                const existingProduct = inventory.find(p => p.name.toLowerCase() === item.name.toLowerCase());
+                const existingProductId = findClosestMatch(item.name, inventory);
                 return {
-                    itemId: existingProduct?.id || "",
+                    itemId: existingProductId || "",
                     quantity: item.quantity,
                     unitCost: item.unitCost,
                 }
@@ -418,5 +440,3 @@ export default function NewPurchasePage() {
     </div>
   );
 }
-
-    
