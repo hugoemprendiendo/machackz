@@ -17,6 +17,7 @@ const InvoiceDetailsInputSchema = z.object({
     .describe(
       "The invoice data, which can be either a data URI for an image (e.g., 'data:image/png;base64,...') or the full text content of an XML file."
     ),
+  contentType: z.string().describe("The MIME type of the invoice data (e.g., 'image/png' or 'text/plain')."),
 });
 export type InvoiceDetailsInput = z.infer<typeof InvoiceDetailsInputSchema>;
 
@@ -44,14 +45,16 @@ const prompt = ai.definePrompt({
   output: {schema: InvoiceDetailsOutputSchema},
   prompt: `You are an expert at extracting structured data from documents.
 Analyze the following invoice data, which could be from an image or an XML file.
-If the data starts with 'data:image', it's an image. Otherwise, it's likely XML.
 Extract the supplier's name, the invoice number, the date, and a list of all line items.
 For each line item, provide its name/description, quantity, and the unit cost/price.
 The date should be formatted as YYYY-MM-DD.
 
 Invoice Data:
-{{media url=invoiceData}}
-{{{invoiceData}}}
+{{#if (input.contentType.startsWith('image'))}}
+  {{media url=invoiceData contentType=contentType}}
+{{else}}
+  {{{invoiceData}}}
+{{/if}}
 `,
 });
 
@@ -66,3 +69,4 @@ const extractInvoiceDetailsFlow = ai.defineFlow(
     return output!;
   }
 );
+

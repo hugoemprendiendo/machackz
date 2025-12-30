@@ -118,8 +118,9 @@ export default function NewPurchasePage() {
     setIsAiLoading(true);
 
     const reader = new FileReader();
-
-    if (invoiceFile.type.startsWith('image/')) {
+    const isImage = invoiceFile.type.startsWith('image/');
+    
+    if (isImage) {
         reader.readAsDataURL(invoiceFile);
     } else if (invoiceFile.type === 'application/xml' || invoiceFile.type === 'text/xml') {
         reader.readAsText(invoiceFile);
@@ -132,7 +133,10 @@ export default function NewPurchasePage() {
     reader.onload = async () => {
         const fileContent = reader.result as string;
         try {
-            const result = await extractInvoiceDetails({ invoiceData: fileContent });
+            const result = await extractInvoiceDetails({
+              invoiceData: fileContent,
+              contentType: isImage ? invoiceFile.type : 'text/plain', // Pass content type
+            });
             
             form.setValue("invoiceNumber", result.invoiceNumber);
             
