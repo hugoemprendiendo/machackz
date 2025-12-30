@@ -1,9 +1,10 @@
+
 'use client';
 
 import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
 import { FirebaseApp } from 'firebase/app';
 import { Firestore } from 'firebase/firestore';
-import { Auth, User, onAuthStateChanged } from 'firebase/auth';
+import { Auth, User, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { FirebaseErrorListener } from '@/components/FirebaseErrorListener'
 
 interface FirebaseProviderProps {
@@ -74,7 +75,28 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       return;
     }
 
-    setUserAuthState({ user: null, isUserLoading: true, userError: null }); // Reset on auth instance change
+    // Seed a default user in development if no user exists
+    if (process.env.NODE_ENV === 'development' && !auth.currentUser) {
+        const seedUser = async () => {
+            try {
+                // Try to sign in first, if it fails, then create the user.
+                await signInWithEmailAndPassword(auth, 'admin@example.com', 'password');
+            } catch (signInError) {
+                // If sign in fails (e.g., user not found), try to create the user.
+                try {
+                    await createUserWithEmailAndPassword(auth, 'admin@example.com', 'password');
+                } catch (signUpError) {
+                    // We can ignore 'auth/email-already-in-use' as it means another process created it.
+                    if (signUpError.code !== 'auth/email-already-in-use') {
+                        console.warn("Could not create seed user:", signUpError);
+                    }
+                }
+            }
+        };
+        seedUser();
+    }
+
+    setUserAuthState({ user: auth.currentUser, isUserLoading: true, userError: null }); // Reset on auth instance change
 
     const unsubscribe = onAuthStateChanged(
       auth,
