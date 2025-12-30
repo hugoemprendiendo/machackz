@@ -27,6 +27,7 @@ const InvoiceDetailsOutputSchema = z.object({
   items: z.array(
     z.object({
       name: z.string().describe('The name or description of the item.'),
+      sku: z.string().optional().describe('The SKU, product code, or key for the item.'),
       quantity: z.number().describe('The quantity of the item purchased.'),
       unitCost: z.number().describe('The cost or price per unit of the item.'),
     })
@@ -45,7 +46,7 @@ const prompt = ai.definePrompt({
   prompt: `You are an expert at extracting structured data from documents.
 Analyze the following invoice document.
 Extract the invoice number, the date, and a list of all line items.
-For each line item, provide its name/description, quantity, and the unit cost/price.
+For each line item, provide its name/description, its SKU/code/key if available, the quantity, and the unit cost/price.
 Do NOT extract the supplier name.
 The date should be formatted as YYYY-MM-DD.
 
@@ -66,5 +67,3 @@ const extractInvoiceDetailsFlow = ai.defineFlow(
     return output!;
   }
 );
-
-    
