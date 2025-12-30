@@ -39,24 +39,37 @@ export async function extractInvoiceDetails(input: InvoiceDetailsInput): Promise
   return extractInvoiceDetailsFlow(input);
 }
 
-const prompt = ai.definePrompt({
-  name: 'extractInvoiceDetailsPrompt',
+const imagePrompt = ai.definePrompt({
+  name: 'extractInvoiceDetailsImagePrompt',
   input: {schema: InvoiceDetailsInputSchema},
   output: {schema: InvoiceDetailsOutputSchema},
   prompt: `You are an expert at extracting structured data from documents.
-Analyze the following invoice data, which could be from an image or an XML file.
+Analyze the following invoice image.
 Extract the supplier's name, the invoice number, the date, and a list of all line items.
 For each line item, provide its name/description, quantity, and the unit cost/price.
 The date should be formatted as YYYY-MM-DD.
 
 Invoice Data:
-{{#if (input.contentType.startsWith('image'))}}
-  {{media url=invoiceData contentType=contentType}}
-{{else}}
-  {{{invoiceData}}}
-{{/if}}
+{{media url=invoiceData contentType=contentType}}
 `,
 });
+
+
+const textPrompt = ai.definePrompt({
+  name: 'extractInvoiceDetailsTextPrompt',
+  input: {schema: InvoiceDetailsInputSchema},
+  output: {schema: InvoiceDetailsOutputSchema},
+  prompt: `You are an expert at extracting structured data from documents.
+Analyze the following invoice XML content.
+Extract the supplier's name, the invoice number, the date, and a list of all line items.
+For each line item, provide its name/description, quantity, and the unit cost/price.
+The date should be formatted as YYYY-MM-DD.
+
+Invoice Data:
+{{{invoiceData}}}
+`,
+});
+
 
 const extractInvoiceDetailsFlow = ai.defineFlow(
   {
@@ -65,8 +78,10 @@ const extractInvoiceDetailsFlow = ai.defineFlow(
     outputSchema: InvoiceDetailsOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
+    const isImage = input.contentType.startsWith('image');
+    const selectedPrompt = isImage ? imagePrompt : textPrompt;
+    
+    const {output} = await selectedPrompt(input);
     return output!;
   }
 );
-
