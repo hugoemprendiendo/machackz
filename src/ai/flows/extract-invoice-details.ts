@@ -15,14 +15,13 @@ const InvoiceDetailsInputSchema = z.object({
   invoiceData: z
     .string()
     .describe(
-      "The invoice data, which can be either a data URI for an image (e.g., 'data:image/png;base64,...') or the full text content of an XML file."
+      "The invoice data, which can be either a data URI for an image (e.g., 'data:image/png;base64,...') or a PDF."
     ),
-  contentType: z.string().describe("The MIME type of the invoice data (e.g., 'image/png' or 'text/plain')."),
+  contentType: z.string().describe("The MIME type of the invoice data (e.g., 'image/png' or 'application/pdf')."),
 });
 export type InvoiceDetailsInput = z.infer<typeof InvoiceDetailsInputSchema>;
 
 const InvoiceDetailsOutputSchema = z.object({
-  supplierName: z.string().describe('The name of the supplier or vendor.'),
   invoiceNumber: z.string().describe('The unique invoice number or ID.'),
   date: z.string().describe('The date of the invoice in YYYY-MM-DD format.'),
   items: z.array(
@@ -39,34 +38,19 @@ export async function extractInvoiceDetails(input: InvoiceDetailsInput): Promise
   return extractInvoiceDetailsFlow(input);
 }
 
-const imagePrompt = ai.definePrompt({
-  name: 'extractInvoiceDetailsImagePrompt',
+const prompt = ai.definePrompt({
+  name: 'extractInvoiceDetailsPrompt',
   input: {schema: InvoiceDetailsInputSchema},
   output: {schema: InvoiceDetailsOutputSchema},
   prompt: `You are an expert at extracting structured data from documents.
-Analyze the following invoice image.
-Extract the supplier's name, the invoice number, the date, and a list of all line items.
+Analyze the following invoice document.
+Extract the invoice number, the date, and a list of all line items.
 For each line item, provide its name/description, quantity, and the unit cost/price.
+Do NOT extract the supplier name.
 The date should be formatted as YYYY-MM-DD.
 
 Invoice Data:
 {{media url=invoiceData contentType=contentType}}
-`,
-});
-
-
-const textPrompt = ai.definePrompt({
-  name: 'extractInvoiceDetailsTextPrompt',
-  input: {schema: InvoiceDetailsInputSchema},
-  output: {schema: InvoiceDetailsOutputSchema},
-  prompt: `You are an expert at extracting structured data from documents.
-Analyze the following invoice XML content.
-Extract the supplier's name, the invoice number, the date, and a list of all line items.
-For each line item, provide its name/description, quantity, and the unit cost/price.
-The date should be formatted as YYYY-MM-DD.
-
-Invoice Data:
-{{{invoiceData}}}
 `,
 });
 
@@ -78,10 +62,9 @@ const extractInvoiceDetailsFlow = ai.defineFlow(
     outputSchema: InvoiceDetailsOutputSchema,
   },
   async input => {
-    const isImage = input.contentType.startsWith('image');
-    const selectedPrompt = isImage ? imagePrompt : textPrompt;
-    
-    const {output} = await selectedPrompt(input);
+    const {output} = await prompt(input);
     return output!;
   }
 );
+
+    

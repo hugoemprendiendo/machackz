@@ -38,7 +38,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDataContext } from "@/context/data-context";
 import { cn } from "@/lib/utils";
 import { NewProductDialog } from "@/components/inventory/new-product-dialog";
-import type { InventoryItem } from "@/lib/types";
+import type { InventoryItem, Supplier } from "@/lib/types";
 import { extractInvoiceDetails } from "@/ai/flows/extract-invoice-details";
 
 const purchaseItemSchema = z.object({
@@ -50,7 +50,7 @@ const purchaseItemSchema = z.object({
 
 const purchaseFormSchema = z.object({
   supplierId: z.string({ required_error: "Por favor selecciona un proveedor." }),
-  invoiceNumber: z.string().min(3, "El número de factura es requerido."),
+  invoiceNumber: z.string().min(3, "El número de factura es requerido.").optional().or(z.literal('')),
   date: z.string(),
   items: z.array(purchaseItemSchema).min(1, "Debes añadir al menos un producto."),
 });
@@ -71,7 +71,11 @@ function findClosestMatch(name: string, list: {id: string, name: string}[]) {
             score = 100;
         } else if (itemNameLower.includes(lowerCaseName) || lowerCaseName.includes(itemNameLower)) {
             const lengthDifference = Math.abs(itemNameLower.length - lowerCaseName.length);
-            score = 50 - lengthDifference;
+            score = 80 - lengthDifference; // Higher base score for partial match
+        } else {
+            // Levenshtein distance for more complex matching
+            const distance = levenshtein(lowerCaseName, itemNameLower);
+            score = (1 - (distance / Math.max(lowerCaseName.length, itemNameLower.length))) * 70;
         }
         
         if (score > highestScore) {
@@ -80,8 +84,37 @@ function findClosestMatch(name: string, list: {id: string, name: string}[]) {
         }
     });
 
-    return bestMatch;
+    // Only return a match if the score is above a certain threshold
+    return highestScore > 60 ? bestMatch : null;
 }
+
+// Levenshtein distance function
+function levenshtein(a: string, b: string): number {
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) {
+        matrix[i] = [i];
+    }
+    for (let j = 0; j <= a.length; j++) {
+        matrix[0][j] = j;
+    }
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j] + 1
+                );
+            }
+        }
+    }
+    return matrix[b.length][a.length];
+}
+
 
 export default function NewPurchasePage() {
   const router = useRouter();
@@ -92,12 +125,14 @@ export default function NewPurchasePage() {
   const [isAiLoading, setIsAiLoading] = React.useState(false);
   const [invoiceFile, setInvoiceFile] = React.useState<File | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [aiSupplierId, setAiSupplierId] = React.useState<string>("");
   
   const form = useForm<PurchaseFormValues>({
     resolver: zodResolver(purchaseFormSchema),
     defaultValues: {
       date: format(new Date(), "yyyy-MM-dd"),
       items: [],
+      invoiceNumber: "",
     },
   });
 
@@ -133,21 +168,16 @@ export default function NewPurchasePage() {
         toast({ variant: "destructive", title: "No hay archivo", description: "Por favor, selecciona un archivo de factura (imagen o XML)." });
         return;
     }
-    setIsAiLoading(true);
-
-    const reader = new FileReader();
-    const isImage = invoiceFile.type.startsWith('image/');
-    
-    if (isImage) {
-        reader.readAsDataURL(invoiceFile);
-    } else if (invoiceFile.type === 'application/xml' || invoiceFile.type === 'text/xml') {
-        reader.readAsText(invoiceFile);
-    } else {
-        toast({ variant: "destructive", title: "Formato no soportado", description: "Por favor, sube un archivo de imagen o XML." });
-        setIsAiLoading(false);
+    if (!aiSupplierId) {
+        toast({ variant: "destructive", title: "Falta proveedor", description: "Por favor, selecciona un proveedor antes de analizar." });
         return;
     }
+    setIsAiLoading(true);
+    form.setValue("supplierId", aiSupplierId);
 
+    const reader = new FileReader();
+    reader.readAsDataURL(invoiceFile);
+    
     reader.onload = async () => {
         const fileContent = reader.result as string;
         try {
@@ -156,28 +186,20 @@ export default function NewPurchasePage() {
               contentType: invoiceFile.type,
             });
             
-            // Set invoice number and date
             form.setValue("invoiceNumber", result.invoiceNumber);
             try {
-                const parsedDate = parse(result.date, 'yyyy-MM-dd', new Date());
-                if (!isNaN(parsedDate.getTime())) {
-                    form.setValue("date", format(parsedDate, "yyyy-MM-dd"));
-                } else {
-                   console.warn("Could not parse date from AI, leaving default.")
+                if (result.date) {
+                    const parsedDate = parse(result.date, 'yyyy-MM-dd', new Date());
+                    if (!isNaN(parsedDate.getTime())) {
+                        form.setValue("date", format(parsedDate, "yyyy-MM-dd"));
+                    } else {
+                       console.warn("Could not parse date from AI, leaving default.")
+                    }
                 }
             } catch (e) {
                 console.error("Could not parse date from AI, leaving default.", e)
             }
 
-            // Find and set supplier
-            const supplierId = findClosestMatch(result.supplierName, suppliers);
-            if (supplierId) {
-                form.setValue("supplierId", supplierId);
-            } else {
-                 toast({ variant: 'destructive', title: "Proveedor no encontrado", description: `No se pudo encontrar un proveedor que coincida con "${result.supplierName}". Por favor, selecciónalo o créalo manualmente.` });
-            }
-
-            // Process items
             const newItems = result.items.map(item => {
                 const existingProductId = findClosestMatch(item.name, inventory);
                 return {
@@ -210,7 +232,7 @@ export default function NewPurchasePage() {
     const newStockEntry = {
         supplierId: data.supplierId,
         supplierName: supplier?.name || 'N/A',
-        invoiceNumber: data.invoiceNumber,
+        invoiceNumber: data.invoiceNumber || '',
         date: new Date(data.date).toISOString(),
         totalCost: totalCost,
         items: data.items.map(item => {
@@ -244,8 +266,8 @@ export default function NewPurchasePage() {
   
   React.useEffect(() => {
     if (lastCreatedProduct) {
-        // Find the first item that doesn't have an itemId and might match the created product
-        const itemIndexToUpdate = watchedItems.findIndex(item => !item.itemId && item.itemNameFromAI?.toLowerCase() === lastCreatedProduct.name.toLowerCase());
+        const itemIndexToUpdate = watchedItems.findIndex(item => !item.itemId && item.itemNameFromAI && findClosestMatch(item.itemNameFromAI, [lastCreatedProduct]));
+        
         if (itemIndexToUpdate !== -1) {
             form.setValue(`items.${itemIndexToUpdate}.itemId`, lastCreatedProduct.id);
             form.setValue(`items.${itemIndexToUpdate}.itemNameFromAI`, undefined);
@@ -279,29 +301,47 @@ export default function NewPurchasePage() {
        <Card>
         <CardHeader>
             <CardTitle>Análisis con IA</CardTitle>
-            <CardDescription>Sube una imagen o un archivo XML de tu factura y deja que la IA rellene los campos por ti.</CardDescription>
+            <CardDescription>Sube una factura y deja que la IA rellene los campos por ti.</CardDescription>
         </CardHeader>
-        <CardContent className="grid md:grid-cols-2 gap-6 items-center">
-            <div 
-                className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-muted rounded-lg cursor-pointer hover:border-primary transition-colors"
-                onClick={() => fileInputRef.current?.click()}
-            >
-                <UploadCloud className="w-10 h-10 text-muted-foreground"/>
-                <p className="mt-2 text-sm text-muted-foreground">
-                    {invoiceFile ? `Archivo: ${invoiceFile.name}` : "Haz clic o arrastra para subir la factura"}
-                </p>
-                <Input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    accept="image/*,application/xml,text/xml"
-                    onChange={handleFileChange}
-                />
+        <CardContent className="grid md:grid-cols-3 gap-6 items-center">
+            <div className="space-y-2">
+                <Label>1. Selecciona el Proveedor</Label>
+                <Select onValueChange={setAiSupplierId} value={aiSupplierId}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar proveedor..."/>
+                    </SelectTrigger>
+                    <SelectContent>
+                        {suppliers.map(s => (
+                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
-            <Button type="button" onClick={handleAnalyzeInvoice} disabled={isAiLoading || !invoiceFile}>
-                {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Wand2 className="mr-2 h-4 w-4"/>}
-                {isAiLoading ? 'Analizando...' : 'Analizar Factura'}
-            </Button>
+            <div className="space-y-2">
+                <Label>2. Sube la Factura</Label>
+                <div 
+                    className="flex flex-col items-center justify-center p-2 border-2 border-dashed border-muted rounded-lg cursor-pointer hover:border-primary transition-colors h-20"
+                    onClick={() => fileInputRef.current?.click()}
+                >
+                    <UploadCloud className="w-6 h-6 text-muted-foreground"/>
+                    <p className="mt-1 text-xs text-muted-foreground truncate max-w-full px-2">
+                        {invoiceFile ? `${invoiceFile.name}` : "Haz clic para subir"}
+                    </p>
+                    <Input
+                        ref={fileInputRef}
+                        type="file"
+                        className="hidden"
+                        accept="image/*,application/xml,text/xml,.pdf"
+                        onChange={handleFileChange}
+                    />
+                </div>
+            </div>
+            <div className="flex items-end h-full">
+                <Button type="button" onClick={handleAnalyzeInvoice} disabled={isAiLoading || !invoiceFile || !aiSupplierId} className="w-full">
+                    {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Wand2 className="mr-2 h-4 w-4"/>}
+                    {isAiLoading ? 'Analizando...' : '3. Analizar Factura'}
+                </Button>
+            </div>
         </CardContent>
       </Card>
       <form id="purchase-new-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
@@ -374,7 +414,7 @@ export default function NewPurchasePage() {
                             name={`items.${index}.itemId`}
                             render={({ field }) => (
                                <Select onValueChange={field.onChange} value={field.value}>
-                                    <SelectTrigger>
+                                    <SelectTrigger className={cn(item.itemNameFromAI && "border-amber-500")}>
                                         <SelectValue placeholder="Seleccionar producto..." />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -385,7 +425,7 @@ export default function NewPurchasePage() {
                                </Select>
                             )}
                         />
-                       {item.itemNameFromAI && <p className="text-xs text-amber-600 mt-1">Sugerencia IA: "{item.itemNameFromAI}". Créalo o elige uno existente.</p>}
+                       {item.itemNameFromAI && <p className="text-xs text-amber-600 mt-1">Nuevo: "{item.itemNameFromAI}". Créalo o elige uno existente.</p>}
                        {form.formState.errors.items?.[index]?.itemId && <p className="text-sm text-destructive mt-1">{form.formState.errors.items?.[index]?.itemId?.message}</p>}
                     </TableCell>
                     <TableCell>
@@ -454,4 +494,6 @@ export default function NewPurchasePage() {
     </div>
   );
 }
+    
+
     
