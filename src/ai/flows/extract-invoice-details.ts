@@ -1,8 +1,9 @@
+
 'use server';
 /**
- * @fileOverview Extracts structured data from an invoice image.
+ * @fileOverview Extracts structured data from an invoice image or XML file.
  *
- * - extractInvoiceDetails - A function that analyzes an invoice image and returns its details.
+ * - extractInvoiceDetails - A function that analyzes an invoice and returns its details.
  * - InvoiceDetailsInput - The input type for the extractInvoiceDetails function.
  * - InvoiceDetailsOutput - The return type for the extractInvoiceDetails function.
  */
@@ -11,10 +12,10 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const InvoiceDetailsInputSchema = z.object({
-  invoiceImageDataUri: z
+  invoiceData: z
     .string()
     .describe(
-      "An image of an invoice, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+      "The invoice data, which can be either a data URI for an image (e.g., 'data:image/png;base64,...') or the full text content of an XML file."
     ),
 });
 export type InvoiceDetailsInput = z.infer<typeof InvoiceDetailsInputSchema>;
@@ -42,11 +43,20 @@ const prompt = ai.definePrompt({
   input: {schema: InvoiceDetailsInputSchema},
   output: {schema: InvoiceDetailsOutputSchema},
   prompt: `You are an expert at extracting structured data from documents.
-Analyze the following invoice image and extract the supplier's name, the invoice number, the date, and a list of all line items.
+Analyze the following invoice data, which could be from an image or an XML file.
+Extract the supplier's name, the invoice number, the date, and a list of all line items.
 For each line item, provide its name/description, quantity, and the unit cost/price.
 The date should be formatted as YYYY-MM-DD.
 
-Invoice Image: {{media url=invoiceImageDataUri}}`,
+Invoice Data:
+{{#if (startsWith invoiceData "data:image")}}
+  {{media url=invoiceData}}
+{{else}}
+  \`\`\`xml
+  {{{invoiceData}}}
+  \`\`\`
+{{/if}}
+`,
 });
 
 const extractInvoiceDetailsFlow = ai.defineFlow(
@@ -60,3 +70,5 @@ const extractInvoiceDetailsFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    

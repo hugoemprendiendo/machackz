@@ -112,17 +112,27 @@ export default function NewPurchasePage() {
 
   const handleAnalyzeInvoice = async () => {
     if (!invoiceFile) {
-        toast({ variant: "destructive", title: "No hay archivo", description: "Por favor, selecciona un archivo de factura." });
+        toast({ variant: "destructive", title: "No hay archivo", description: "Por favor, selecciona un archivo de factura (imagen o XML)." });
         return;
     }
     setIsAiLoading(true);
 
     const reader = new FileReader();
-    reader.readAsDataURL(invoiceFile);
+
+    if (invoiceFile.type.startsWith('image/')) {
+        reader.readAsDataURL(invoiceFile);
+    } else if (invoiceFile.type === 'application/xml' || invoiceFile.type === 'text/xml') {
+        reader.readAsText(invoiceFile);
+    } else {
+        toast({ variant: "destructive", title: "Formato no soportado", description: "Por favor, sube un archivo de imagen o XML." });
+        setIsAiLoading(false);
+        return;
+    }
+
     reader.onload = async () => {
-        const dataUri = reader.result as string;
+        const fileContent = reader.result as string;
         try {
-            const result = await extractInvoiceDetails({ invoiceImageDataUri: dataUri });
+            const result = await extractInvoiceDetails({ invoiceData: fileContent });
             
             form.setValue("invoiceNumber", result.invoiceNumber);
             
@@ -230,7 +240,7 @@ export default function NewPurchasePage() {
        <Card>
         <CardHeader>
             <CardTitle>Análisis con IA</CardTitle>
-            <CardDescription>Sube una imagen de tu factura y deja que la IA rellene los campos por ti.</CardDescription>
+            <CardDescription>Sube una imagen o un archivo XML de tu factura y deja que la IA rellene los campos por ti.</CardDescription>
         </CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-6 items-center">
             <div 
@@ -245,7 +255,7 @@ export default function NewPurchasePage() {
                     ref={fileInputRef}
                     type="file"
                     className="hidden"
-                    accept="image/*"
+                    accept="image/*,application/xml,text/xml"
                     onChange={handleFileChange}
                 />
             </div>
@@ -404,3 +414,5 @@ export default function NewPurchasePage() {
     </div>
   );
 }
+
+    
