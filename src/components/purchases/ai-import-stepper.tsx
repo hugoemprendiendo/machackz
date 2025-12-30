@@ -332,10 +332,11 @@ export function AiImportStepper() {
                          <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="w-2/5">Producto de la Factura</TableHead>
-                                    <TableHead>Producto en Inventario</TableHead>
-                                    <TableHead>Cantidad</TableHead>
-                                    <TableHead>Costo Unit.</TableHead>
+                                    <TableHead className="w-1/3">Producto (Factura)</TableHead>
+                                    <TableHead>SKU (Factura)</TableHead>
+                                    <TableHead className="w-1/3">Producto (Inventario)</TableHead>
+                                    <TableHead>Cant.</TableHead>
+                                    <TableHead>Costo</TableHead>
                                     <TableHead><span className="sr-only">Acciones</span></TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -346,7 +347,9 @@ export function AiImportStepper() {
                                 <TableRow key={field.id} className={!itemIsMapped ? 'bg-amber-50 dark:bg-amber-950/50' : ''}>
                                     <TableCell>
                                         <div className="font-medium">{field.itemNameFromAI || inventory.find(p => p.id === field.itemId)?.name}</div>
-                                        {field.itemSKUFromAI && <div className="text-xs text-muted-foreground">SKU: {field.itemSKUFromAI}</div>}
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="text-xs text-muted-foreground">{field.itemSKUFromAI || inventory.find(p => p.id === field.itemId)?.sku}</div>
                                     </TableCell>
                                     <TableCell>
                                          <Controller
@@ -372,8 +375,8 @@ export function AiImportStepper() {
                                         />
                                         {form.formState.errors.items?.[index]?.itemId && <p className="text-sm text-destructive mt-1">{form.formState.errors.items?.[index]?.itemId?.message}</p>}
                                     </TableCell>
-                                    <TableCell><Input type="number" {...form.register(`items.${index}.quantity`)} className="w-24"/></TableCell>
-                                    <TableCell><Input type="number" step="0.01" {...form.register(`items.${index}.unitCost`)} className="w-28" /></TableCell>
+                                    <TableCell><Input type="number" {...form.register(`items.${index}.quantity`)} className="w-20"/></TableCell>
+                                    <TableCell><Input type="number" step="0.01" {...form.register(`items.${index}.unitCost`)} className="w-24" /></TableCell>
                                     <TableCell>
                                         <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
                                             <Trash2 className="h-4 w-4 text-destructive" />
