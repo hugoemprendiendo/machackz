@@ -29,10 +29,10 @@ const inventoryFormSchema = z.object({
   sku: z.string().optional(),
   costPrice: z.coerce.number().min(0, "El costo debe ser un número positivo."),
   sellingPrice: z.coerce.number().min(0, "El precio de venta debe ser un número positivo."),
-  stock: z.coerce.number().int("El stock debe ser un número entero.").min(0),
-  minStock: z.coerce.number().int("El stock mínimo debe ser un número entero.").min(0),
+  stock: z.coerce.number().int("El stock debe ser un número entero.").min(0).default(0),
+  minStock: z.coerce.number().int("El stock mínimo debe ser un número entero.").min(0).default(0),
   hasTax: z.boolean().default(true),
-  taxRate: z.coerce.number().min(0, "El impuesto debe ser un número positivo."),
+  taxRate: z.coerce.number().min(0, "El impuesto debe ser un número positivo.").default(16),
 });
 
 type InventoryFormValues = z.infer<typeof inventoryFormSchema>;
@@ -42,9 +42,10 @@ interface NewProductDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onProductCreated: (product: InventoryItem) => void;
+  initialName?: string;
 }
 
-export function NewProductDialog({ children, open, onOpenChange, onProductCreated }: NewProductDialogProps) {
+export function NewProductDialog({ children, open, onOpenChange, onProductCreated, initialName }: NewProductDialogProps) {
   const { toast } = useToast();
   const { addInventoryItem } = useDataContext();
 
@@ -52,7 +53,7 @@ export function NewProductDialog({ children, open, onOpenChange, onProductCreate
     resolver: zodResolver(inventoryFormSchema),
     defaultValues: {
       name: "",
-      category: "",
+      category: "General",
       sku: "",
       costPrice: 0,
       sellingPrice: 0,
@@ -62,24 +63,37 @@ export function NewProductDialog({ children, open, onOpenChange, onProductCreate
       taxRate: 16,
     },
   });
+  
+  React.useEffect(() => {
+    if (initialName) {
+        form.setValue('name', initialName);
+    }
+  }, [initialName, form]);
 
   const onSubmit = async (data: InventoryFormValues) => {
     const newProductData = {
         ...data,
+        isService: false, // Products created here are always physical items
         sku: data.sku || '',
     };
     
-    const docRef = await addInventoryItem(newProductData);
-    const newProduct: InventoryItem = { ...newProductData, id: docRef.id };
+    const newProduct = await addInventoryItem(newProductData);
 
     toast({
       title: "Producto Creado",
       description: `El producto ${data.name} ha sido añadido al inventario.`,
     });
     form.reset();
-    onProductCreated(newProduct);
+    onProductCreated({ ...newProductData, id: newProduct.id });
     onOpenChange(false);
   };
+  
+  // Reset form when dialog is closed without submitting
+  React.useEffect(() => {
+    if (!open) {
+      form.reset();
+    }
+  }, [open, form]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -91,7 +105,7 @@ export function NewProductDialog({ children, open, onOpenChange, onProductCreate
             Completa los datos para registrar un nuevo producto en tu inventario.
           </DialogDescription>
         </DialogHeader>
-        <form id="new-product-dialog-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+        <form id="new-product-dialog-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
            <div className="space-y-2">
               <Label htmlFor="name">Nombre del Producto</Label>
               <Input id="name" {...form.register("name")} placeholder="Ej. SSD 1TB Kingston" />

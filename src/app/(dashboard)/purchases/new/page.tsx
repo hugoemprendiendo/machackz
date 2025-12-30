@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ChevronLeft, PlusCircle, Trash2, Wand2, Loader2, UploadCloud } from "lucide-react";
-import { format, parse } from "date-fns";
+import { ChevronLeft, PlusCircle, Trash2 } from "lucide-react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -36,16 +36,13 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useDataContext } from "@/context/data-context";
-import { cn } from "@/lib/utils";
 import { NewProductDialog } from "@/components/inventory/new-product-dialog";
-import type { InventoryItem, Supplier } from "@/lib/types";
-import { extractInvoiceDetails } from "@/ai/flows/extract-invoice-details";
+import type { InventoryItem } from "@/lib/types";
 
 const purchaseItemSchema = z.object({
   itemId: z.string().min(1, "Selecciona un producto."),
   quantity: z.coerce.number().int().min(1, "La cantidad debe ser al menos 1."),
   unitCost: z.coerce.number().min(0, "El costo debe ser positivo."),
-  itemNameFromAI: z.string().optional(), // To hold the name from AI if not found
 });
 
 const purchaseFormSchema = z.object({
@@ -57,64 +54,6 @@ const purchaseFormSchema = z.object({
 
 type PurchaseFormValues = z.infer<typeof purchaseFormSchema>;
 
-function findClosestMatch(name: string, list: {id: string, name: string}[]) {
-    if (!name || list.length === 0) return null;
-    const lowerCaseName = name.toLowerCase().trim();
-    let bestMatch = null;
-    let highestScore = -1;
-
-    list.forEach(item => {
-        const itemNameLower = item.name.toLowerCase().trim();
-        let score = 0;
-        
-        if (itemNameLower === lowerCaseName) {
-            score = 100;
-        } else if (itemNameLower.includes(lowerCaseName) || lowerCaseName.includes(itemNameLower)) {
-            const lengthDifference = Math.abs(itemNameLower.length - lowerCaseName.length);
-            score = 80 - lengthDifference; // Higher base score for partial match
-        } else {
-            // Levenshtein distance for more complex matching
-            const distance = levenshtein(lowerCaseName, itemNameLower);
-            score = (1 - (distance / Math.max(lowerCaseName.length, itemNameLower.length))) * 70;
-        }
-        
-        if (score > highestScore) {
-            highestScore = score;
-            bestMatch = item.id;
-        }
-    });
-
-    // Only return a match if the score is above a certain threshold
-    return highestScore > 60 ? bestMatch : null;
-}
-
-// Levenshtein distance function
-function levenshtein(a: string, b: string): number {
-    if (a.length === 0) return b.length;
-    if (b.length === 0) return a.length;
-    const matrix = [];
-    for (let i = 0; i <= b.length; i++) {
-        matrix[i] = [i];
-    }
-    for (let j = 0; j <= a.length; j++) {
-        matrix[0][j] = j;
-    }
-    for (let i = 1; i <= b.length; i++) {
-        for (let j = 1; j <= a.length; j++) {
-            if (b.charAt(i - 1) === a.charAt(j - 1)) {
-                matrix[i][j] = matrix[i - 1][j - 1];
-            } else {
-                matrix[i][j] = Math.min(
-                    matrix[i - 1][j - 1] + 1,
-                    matrix[i][j - 1] + 1,
-                    matrix[i - 1][j] + 1
-                );
-            }
-        }
-    }
-    return matrix[b.length][a.length];
-}
-
 
 export default function NewPurchasePage() {
   const router = useRouter();
@@ -122,10 +61,6 @@ export default function NewPurchasePage() {
   const { suppliers, inventory, addStockEntry, updateInventoryStock } = useDataContext();
   const [isProductDialogOpen, setProductDialogOpen] = React.useState(false);
   const [lastCreatedProduct, setLastCreatedProduct] = React.useState<InventoryItem | null>(null);
-  const [isAiLoading, setIsAiLoading] = React.useState(false);
-  const [invoiceFile, setInvoiceFile] = React.useState<File | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const [aiSupplierId, setAiSupplierId] = React.useState<string>("");
   
   const form = useForm<PurchaseFormValues>({
     resolver: zodResolver(purchaseFormSchema),
@@ -136,7 +71,7 @@ export default function NewPurchasePage() {
     },
   });
 
-  const { fields, append, remove, replace } = useFieldArray({
+  const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "items",
   });
@@ -157,74 +92,6 @@ export default function NewPurchasePage() {
       return { ...calculated, totalCost: calculated.subtotal + calculated.taxTotal };
   }, [watchedItems, inventory]);
   
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      setInvoiceFile(event.target.files[0]);
-    }
-  };
-
-  const handleAnalyzeInvoice = async () => {
-    if (!invoiceFile) {
-        toast({ variant: "destructive", title: "No hay archivo", description: "Por favor, selecciona un archivo de factura (imagen o XML)." });
-        return;
-    }
-    if (!aiSupplierId) {
-        toast({ variant: "destructive", title: "Falta proveedor", description: "Por favor, selecciona un proveedor antes de analizar." });
-        return;
-    }
-    setIsAiLoading(true);
-    form.setValue("supplierId", aiSupplierId);
-
-    const reader = new FileReader();
-    reader.readAsDataURL(invoiceFile);
-    
-    reader.onload = async () => {
-        const fileContent = reader.result as string;
-        try {
-            const result = await extractInvoiceDetails({
-              invoiceData: fileContent,
-              contentType: invoiceFile.type,
-            });
-            
-            form.setValue("invoiceNumber", result.invoiceNumber);
-            try {
-                if (result.date) {
-                    const parsedDate = parse(result.date, 'yyyy-MM-dd', new Date());
-                    if (!isNaN(parsedDate.getTime())) {
-                        form.setValue("date", format(parsedDate, "yyyy-MM-dd"));
-                    } else {
-                       console.warn("Could not parse date from AI, leaving default.")
-                    }
-                }
-            } catch (e) {
-                console.error("Could not parse date from AI, leaving default.", e)
-            }
-
-            const newItems = result.items.map(item => {
-                const existingProductId = findClosestMatch(item.name, inventory);
-                return {
-                    itemId: existingProductId || "",
-                    quantity: item.quantity,
-                    unitCost: item.unitCost,
-                    itemNameFromAI: existingProductId ? undefined : item.name,
-                }
-            });
-            replace(newItems);
-            
-            toast({ title: "Factura Analizada", description: "El formulario ha sido rellenado con los datos de la factura." });
-
-        } catch (error) {
-            console.error("AI Invoice Analysis Error:", error);
-            toast({ variant: "destructive", title: "Error de IA", description: "No se pudo analizar la factura. Inténtalo de nuevo." });
-        } finally {
-            setIsAiLoading(false);
-        }
-    };
-    reader.onerror = () => {
-        setIsAiLoading(false);
-        toast({ variant: "destructive", title: "Error de Lectura", description: "No se pudo leer el archivo seleccionado." });
-    }
-  };
 
   const onSubmit = (data: PurchaseFormValues) => {
     const supplier = suppliers.find(s => s.id === data.supplierId);
@@ -266,20 +133,11 @@ export default function NewPurchasePage() {
   
   React.useEffect(() => {
     if (lastCreatedProduct) {
-        const itemIndexToUpdate = watchedItems.findIndex(item => !item.itemId && item.itemNameFromAI && findClosestMatch(item.itemNameFromAI, [lastCreatedProduct]));
-        
-        if (itemIndexToUpdate !== -1) {
-            form.setValue(`items.${itemIndexToUpdate}.itemId`, lastCreatedProduct.id);
-            form.setValue(`items.${itemIndexToUpdate}.itemNameFromAI`, undefined);
-            form.setValue(`items.${itemIndexToUpdate}.unitCost`, lastCreatedProduct.costPrice);
-        } else {
-             append({ itemId: lastCreatedProduct.id, quantity: 1, unitCost: lastCreatedProduct.costPrice });
-        }
-       
+        append({ itemId: lastCreatedProduct.id, quantity: 1, unitCost: lastCreatedProduct.costPrice });
         form.trigger('items');
         setLastCreatedProduct(null);
     }
-  }, [lastCreatedProduct, append, form, watchedItems]);
+  }, [lastCreatedProduct, append, form]);
   
   const physicalInventory = React.useMemo(() => inventory.filter(i => !i.isService), [inventory]);
   
@@ -291,59 +149,13 @@ export default function NewPurchasePage() {
           <span className="sr-only">Volver</span>
         </Button>
         <h1 className="flex-1 shrink-0 whitespace-nowrap text-xl font-headline font-semibold tracking-tight sm:grow-0">
-          Registrar Nueva Compra
+          Registrar Nueva Compra (Manual)
         </h1>
         <div className="flex items-center gap-2 ml-auto">
             <Button type="button" variant="outline" onClick={() => router.push('/purchases')}>Cancelar</Button>
             <Button type="submit" form="purchase-new-form">Guardar Compra</Button>
         </div>
       </div>
-       <Card>
-        <CardHeader>
-            <CardTitle>Análisis con IA</CardTitle>
-            <CardDescription>Sube una factura y deja que la IA rellene los campos por ti.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid md:grid-cols-3 gap-6 items-center">
-            <div className="space-y-2">
-                <Label>1. Selecciona el Proveedor</Label>
-                <Select onValueChange={setAiSupplierId} value={aiSupplierId}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar proveedor..."/>
-                    </SelectTrigger>
-                    <SelectContent>
-                        {suppliers.map(s => (
-                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-            <div className="space-y-2">
-                <Label>2. Sube la Factura</Label>
-                <div 
-                    className="flex flex-col items-center justify-center p-2 border-2 border-dashed border-muted rounded-lg cursor-pointer hover:border-primary transition-colors h-20"
-                    onClick={() => fileInputRef.current?.click()}
-                >
-                    <UploadCloud className="w-6 h-6 text-muted-foreground"/>
-                    <p className="mt-1 text-xs text-muted-foreground truncate max-w-full px-2">
-                        {invoiceFile ? `${invoiceFile.name}` : "Haz clic para subir"}
-                    </p>
-                    <Input
-                        ref={fileInputRef}
-                        type="file"
-                        className="hidden"
-                        accept="image/*,application/xml,text/xml,.pdf"
-                        onChange={handleFileChange}
-                    />
-                </div>
-            </div>
-            <div className="flex items-end h-full">
-                <Button type="button" onClick={handleAnalyzeInvoice} disabled={isAiLoading || !invoiceFile || !aiSupplierId} className="w-full">
-                    {isAiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Wand2 className="mr-2 h-4 w-4"/>}
-                    {isAiLoading ? 'Analizando...' : '3. Analizar Factura'}
-                </Button>
-            </div>
-        </CardContent>
-      </Card>
       <form id="purchase-new-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <Card>
             <CardHeader>
@@ -414,7 +226,7 @@ export default function NewPurchasePage() {
                             name={`items.${index}.itemId`}
                             render={({ field }) => (
                                <Select onValueChange={field.onChange} value={field.value}>
-                                    <SelectTrigger className={cn(item.itemNameFromAI && "border-amber-500")}>
+                                    <SelectTrigger>
                                         <SelectValue placeholder="Seleccionar producto..." />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -425,7 +237,6 @@ export default function NewPurchasePage() {
                                </Select>
                             )}
                         />
-                       {item.itemNameFromAI && <p className="text-xs text-amber-600 mt-1">Nuevo: "{item.itemNameFromAI}". Créalo o elige uno existente.</p>}
                        {form.formState.errors.items?.[index]?.itemId && <p className="text-sm text-destructive mt-1">{form.formState.errors.items?.[index]?.itemId?.message}</p>}
                     </TableCell>
                     <TableCell>
@@ -494,6 +305,3 @@ export default function NewPurchasePage() {
     </div>
   );
 }
-    
-
-    

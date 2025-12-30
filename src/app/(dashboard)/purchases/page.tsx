@@ -1,6 +1,6 @@
 "use client";
 
-import { PlusCircle, MoreHorizontal, Trash2 } from "lucide-react";
+import { PlusCircle, MoreHorizontal, Trash2, Wand2 } from "lucide-react";
 import React from "react";
 import {
   AlertDialog,
@@ -89,12 +89,20 @@ export default function PurchasesPage() {
                 <h1 className="text-3xl font-headline font-bold tracking-tight">Compras</h1>
                 <p className="text-muted-foreground">Registra y visualiza las entradas de mercancía.</p>
             </div>
-            <Button asChild>
-                <Link href="/purchases/new">
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Nueva Compra
-                </Link>
-            </Button>
+            <div className="flex gap-2">
+                <Button asChild variant="outline">
+                    <Link href="/purchases/new">
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Nueva Compra (Manual)
+                    </Link>
+                </Button>
+                 <Button asChild>
+                    <Link href="/purchases/import">
+                        <Wand2 className="mr-2 h-4 w-4" />
+                        Importar con Factura (IA)
+                    </Link>
+                </Button>
+            </div>
         </div>
         <Card>
             <CardHeader>
