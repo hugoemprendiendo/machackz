@@ -218,10 +218,10 @@ export function AiImportStepper() {
         const physicalInventory = inventory.filter(i => !i.isService);
 
         const newItems = rows.map(row => {
-            const name = row[nameIndex] || '';
+            const name = nameIndex > -1 ? row[nameIndex] : '';
             const sku = skuIndex > -1 ? row[skuIndex] : '';
-            const quantity = parseInt(row[quantityIndex], 10) || 1;
-            const unitCost = parseFloat(row[unitCostIndex]?.replace(/[^0-9.-]+/g, '')) || 0;
+            const quantity = quantityIndex > -1 ? parseInt(row[quantityIndex], 10) || 1 : 1;
+            const unitCost = unitCostIndex > -1 ? parseFloat(row[unitCostIndex]?.replace(/[^0-9.-]+/g, '')) || 0 : 0;
 
             let existingProductId: string | null = null;
             
@@ -390,7 +390,7 @@ export function AiImportStepper() {
                     </CardContent>
                     <CardFooter className="justify-between">
                          <Button variant="outline" onClick={() => setStep(1)}><ArrowLeft className="mr-2 h-4 w-4"/>Volver</Button>
-                         <Button onClick={handleProcessMapping} disabled={Object.values(mappedFields).some(v => !v)}>
+                         <Button onClick={handleProcessMapping} disabled={!mappedFields.name || !mappedFields.quantity || !mappedFields.unitCost}>
                             Aplicar Mapeo y Revisar <ArrowRight className="ml-2 h-4 w-4"/>
                         </Button>
                     </CardFooter>
@@ -534,3 +534,5 @@ export function AiImportStepper() {
         </>
     );
 }
+
+    
