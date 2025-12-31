@@ -184,7 +184,7 @@ export function AiImportStepper() {
                     
                     // Priority 1: Match by SKU
                     if (item.sku) {
-                        const product = physicalInventory.find(p => p.sku.toLowerCase() === item.sku!.toLowerCase());
+                        const product = physicalInventory.find(p => p.sku && p.sku.toLowerCase() === item.sku!.toLowerCase());
                         if(product) existingProductId = product.id;
                     }
                     
@@ -198,7 +198,7 @@ export function AiImportStepper() {
                         quantity: item.quantity,
                         unitCost: item.unitCost,
                         itemNameFromAI: existingProductId ? undefined : item.name,
-                        itemSKUFromAI: existingProductId ? undefined : item.sku,
+                        itemSKUFromAI: item.sku, // Pass SKU regardless for display
                     };
                 });
                 form.setValue("items", newItems);
@@ -224,7 +224,7 @@ export function AiImportStepper() {
                 ...watchedItems[itemToCreate.index],
                 itemId: product.id,
                 itemNameFromAI: undefined,
-                itemSKUFromAI: undefined,
+                itemSKUFromAI: product.sku,
             });
             setItemToCreate(null);
         }
@@ -453,8 +453,10 @@ export function AiImportStepper() {
                 open={isProductDialogOpen}
                 onOpenChange={setProductDialogOpen}
                 onProductCreated={onProductCreated}
-                initialValues={{ name: itemToCreate?.name, sku: itemToCreate?.sku }}
+                initialValues={{ name: itemToCreate?.name || '', sku: itemToCreate?.sku || '' }}
             />
         </>
     );
 }
+
+    
