@@ -24,7 +24,7 @@ export type InvoiceDetailsInput = z.infer<typeof InvoiceDetailsInputSchema>;
 const InvoiceDetailsOutputSchema = z.object({
   invoiceNumber: z.string().optional().describe('The unique invoice number or ID.'),
   date: z.string().optional().describe('The date of the invoice in YYYY-MM-DD format.'),
-  headers: z.array(z.string()).describe('The detected headers for the line items table.'),
+  headers: z.array(z.string()).describe('The detected headers for the line items table. You must provide all detected headers.'),
   rows: z.array(z.array(z.string())).describe('The data rows for the line items, matching the headers.'),
 });
 export type InvoiceDetailsOutput = z.infer<typeof InvoiceDetailsOutputSchema>;
@@ -40,7 +40,7 @@ const prompt = ai.definePrompt({
   prompt: `You are an expert at extracting structured data from documents.
 Analyze the following invoice document.
 Extract the invoice number and the date.
-Then, extract all the line items as a table. Provide the detected column headers and then all the data rows.
+Then, extract all the line items as a table. Provide all the detected column headers and then all the data rows.
 The date should be formatted as YYYY-MM-DD.
 
 Invoice Data:
