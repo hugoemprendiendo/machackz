@@ -6,7 +6,7 @@ import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format, parse } from "date-fns";
-import { Loader2, UploadCloud, Wand2, PlusCircle, Trash2, ArrowRight, ArrowLeft, Save, Sparkles, Pencil } from "lucide-react";
+import { Loader2, UploadCloud, Wand2, PlusCircle, Trash2, ArrowRight, ArrowLeft, Save, Sparkles, Pencil, CheckCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -38,7 +38,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDataContext } from "@/context/data-context";
 import { NewProductDialog } from "@/components/inventory/new-product-dialog";
 import type { InventoryItem } from "@/lib/types";
-import { extractInvoiceDetails } from "@/ai/flows/extract-invoice-details";
+import { extractInvoiceDetails, InvoiceDetailsOutput } from "@/ai/flows/extract-invoice-details";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 
@@ -60,6 +60,13 @@ const purchaseFormSchema = z.object({
 });
 
 type PurchaseFormValues = z.infer<typeof purchaseFormSchema>;
+
+type MappedFields = {
+    name: string;
+    sku: string;
+    quantity: string;
+    unitCost: string;
+};
 
 function levenshtein(a: string, b: string): number {
     if (a.length === 0) return b.length;
@@ -118,6 +125,14 @@ export function AiImportStepper() {
     const { suppliers, inventory, addStockEntry, updateInventoryStock } = useDataContext();
     const [isProductDialogOpen, setProductDialogOpen] = React.useState(false);
     const [itemToCreate, setItemToCreate] = React.useState<{ name: string; sku?: string; index: number } | null>(null);
+    const [isAiLoading, setIsAiLoading] = React.useState(false);
+    const [invoiceFile, setInvoiceFile] = React.useState<File | null>(null);
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    
+    // State for raw AI data
+    const [aiData, setAiData] = React.useState<InvoiceDetailsOutput | null>(null);
+    const [mappedFields, setMappedFields] = React.useState<MappedFields>({ name: '', sku: '', quantity: '', unitCost: '' });
+
 
     const form = useForm<PurchaseFormValues>({
         resolver: zodResolver(purchaseFormSchema),
@@ -128,10 +143,6 @@ export function AiImportStepper() {
         control: form.control,
         name: "items",
     });
-
-    const [isAiLoading, setIsAiLoading] = React.useState(false);
-    const [invoiceFile, setInvoiceFile] = React.useState<File | null>(null);
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     const watchedItems = form.watch("items");
     const { subtotal, taxTotal, totalCost } = React.useMemo(() => {
@@ -170,6 +181,7 @@ export function AiImportStepper() {
                     contentType: invoiceFile.type,
                 });
                 
+                setAiData(result);
                 form.setValue("invoiceNumber", result.invoiceNumber);
                 try {
                     if (result.date) {
@@ -178,31 +190,7 @@ export function AiImportStepper() {
                     }
                 } catch (e) { console.error("Could not parse date from AI, leaving default.", e) }
 
-                const physicalInventory = inventory.filter(i => !i.isService);
-                const newItems = result.items.map(item => {
-                    let existingProductId: string | null = null;
-                    
-                    // Priority 1: Match by SKU
-                    if (item.sku) {
-                        const product = physicalInventory.find(p => p.sku && p.sku.toLowerCase() === item.sku!.toLowerCase());
-                        if(product) existingProductId = product.id;
-                    }
-                    
-                    // Priority 2: Match by name if no SKU match
-                    if (!existingProductId) {
-                       existingProductId = findClosestMatchByName(item.name, physicalInventory);
-                    }
-                    
-                    return {
-                        itemId: existingProductId || "",
-                        quantity: item.quantity,
-                        unitCost: item.unitCost,
-                        itemNameFromAI: existingProductId ? undefined : item.name,
-                        itemSKUFromAI: item.sku, // Pass SKU regardless for display
-                    };
-                });
-                form.setValue("items", newItems);
-                toast({ title: "Factura Analizada", description: "Revisa los productos encontrados. Vincula o crea los productos nuevos." });
+                toast({ title: "Factura Analizada", description: "Por favor, mapea las columnas extraídas." });
                 setStep(2);
             } catch (error) {
                 console.error("AI Invoice Analysis Error:", error);
@@ -217,7 +205,52 @@ export function AiImportStepper() {
         }
     };
     
-    // --- Step 2: Review and Create Products ---
+    // --- Step 2: Column Mapping ---
+    const handleProcessMapping = () => {
+        if (!aiData) return;
+        
+        const { headers, rows } = aiData;
+        const nameIndex = headers.indexOf(mappedFields.name);
+        const skuIndex = headers.indexOf(mappedFields.sku);
+        const quantityIndex = headers.indexOf(mappedFields.quantity);
+        const unitCostIndex = headers.indexOf(mappedFields.unitCost);
+
+        const physicalInventory = inventory.filter(i => !i.isService);
+
+        const newItems = rows.map(row => {
+            const name = row[nameIndex] || '';
+            const sku = skuIndex > -1 ? row[skuIndex] : '';
+            const quantity = parseInt(row[quantityIndex], 10) || 1;
+            const unitCost = parseFloat(row[unitCostIndex]?.replace(/[^0-9.-]+/g, '')) || 0;
+
+            let existingProductId: string | null = null;
+            
+            // Priority 1: Match by SKU
+            if (sku) {
+                const product = physicalInventory.find(p => p.sku && p.sku.toLowerCase() === sku.toLowerCase());
+                if(product) existingProductId = product.id;
+            }
+            
+            // Priority 2: Match by name if no SKU match
+            if (!existingProductId) {
+               existingProductId = findClosestMatchByName(name, physicalInventory);
+            }
+            
+            return {
+                itemId: existingProductId || "",
+                quantity: quantity,
+                unitCost: unitCost,
+                itemNameFromAI: existingProductId ? undefined : name,
+                itemSKUFromAI: sku,
+            };
+        });
+
+        form.setValue("items", newItems);
+        toast({ title: "Mapeo Aplicado", description: "Revisa los productos encontrados y vincula o crea los nuevos." });
+        setStep(3);
+    }
+    
+    // --- Step 3: Review and Create Products ---
     const onProductCreated = (product: InventoryItem) => {
         if (itemToCreate !== null) {
             update(itemToCreate.index, {
@@ -239,7 +272,7 @@ export function AiImportStepper() {
 
     const allItemsMapped = watchedItems.every(item => item.itemId);
 
-    // --- Step 3: Final Submission ---
+    // --- Step 4: Final Submission ---
     const onSubmit = (data: PurchaseFormValues) => {
         const supplier = suppliers.find(s => s.id === data.supplierId);
         const newStockEntry = {
@@ -321,11 +354,54 @@ export function AiImportStepper() {
                 </Card>
             )}
 
-            {/* Step 2: Review */}
-            {step === 2 && (
+            {/* Step 2: Map Columns */}
+            {step === 2 && aiData && (
                 <Card>
                     <CardHeader>
-                        <CardTitle>Paso 2: Revisa y Vincula los Productos</CardTitle>
+                        <CardTitle>Paso 2: Mapea las Columnas</CardTitle>
+                        <CardDescription>La IA extrajo las siguientes columnas de tu factura. Por favor, indica a qué campo corresponde cada una.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            {(Object.keys(mappedFields) as Array<keyof MappedFields>).map(field => (
+                                <div key={field} className="space-y-2">
+                                    <Label htmlFor={`map-${field}`} className="capitalize">{field === 'unitCost' ? 'Costo Unit.' : field}</Label>
+                                    <Select onValueChange={(value) => setMappedFields(prev => ({...prev, [field]: value}))}>
+                                        <SelectTrigger id={`map-${field}`}>
+                                            <SelectValue placeholder="Seleccionar columna..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {aiData.headers.map(header => <SelectItem key={header} value={header}>{header}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            ))}
+                        </div>
+                         <Alert>
+                            <Sparkles className="h-4 w-4" />
+                            <AlertTitle>Vista Previa de los Datos Extraídos</AlertTitle>
+                            <AlertDescription>
+                                <Table>
+                                    <TableHeader><TableRow>{aiData.headers.map(h => <TableHead key={h}>{h}</TableHead>)}</TableRow></TableHeader>
+                                    <TableBody>{aiData.rows.slice(0,3).map((row, rIndex) => <TableRow key={rIndex}>{row.map((cell, cIndex) => <TableCell key={cIndex}>{cell}</TableCell>)}</TableRow>)}</TableBody>
+                                </Table>
+                            </AlertDescription>
+                        </Alert>
+                    </CardContent>
+                    <CardFooter className="justify-between">
+                         <Button variant="outline" onClick={() => setStep(1)}><ArrowLeft className="mr-2 h-4 w-4"/>Volver</Button>
+                         <Button onClick={handleProcessMapping} disabled={Object.values(mappedFields).some(v => !v)}>
+                            Aplicar Mapeo y Revisar <ArrowRight className="ml-2 h-4 w-4"/>
+                        </Button>
+                    </CardFooter>
+                </Card>
+            )}
+
+            {/* Step 3: Review */}
+            {step === 3 && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Paso 3: Revisa y Vincula los Productos</CardTitle>
                         <CardDescription>La IA ha extraído estos productos. Vincula los productos nuevos a tu inventario existente o créalos.</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -397,20 +473,20 @@ export function AiImportStepper() {
                         )}
                     </CardContent>
                      <CardFooter className="justify-between">
-                        <Button variant="outline" onClick={() => setStep(1)}><ArrowLeft className="mr-2 h-4 w-4"/>Volver</Button>
-                        <Button onClick={() => setStep(3)} disabled={!allItemsMapped}>
+                        <Button variant="outline" onClick={() => setStep(2)}><ArrowLeft className="mr-2 h-4 w-4"/>Volver</Button>
+                        <Button onClick={() => setStep(4)} disabled={!allItemsMapped}>
                             Revisar y Guardar <ArrowRight className="ml-2 h-4 w-4"/>
                         </Button>
                     </CardFooter>
                 </Card>
             )}
 
-             {/* Step 3: Confirm */}
-            {step === 3 && (
+             {/* Step 4: Confirm */}
+            {step === 4 && (
                  <form id="purchase-confirm-form" onSubmit={form.handleSubmit(onSubmit)}>
                     <Card>
                         <CardHeader>
-                            <CardTitle>Paso 3: Confirmar y Guardar</CardTitle>
+                            <CardTitle>Paso 4: Confirmar y Guardar</CardTitle>
                             <CardDescription>Verifica los totales y guarda la compra. El stock se actualizará automáticamente.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -442,7 +518,7 @@ export function AiImportStepper() {
                             </div>
                         </CardContent>
                         <CardFooter className="justify-between">
-                            <Button type="button" variant="outline" onClick={() => setStep(2)}><ArrowLeft className="mr-2 h-4 w-4"/>Editar Productos</Button>
+                            <Button type="button" variant="outline" onClick={() => setStep(3)}><ArrowLeft className="mr-2 h-4 w-4"/>Editar Productos</Button>
                             <Button type="submit"><Save className="mr-2 h-4 w-4"/>Confirmar y Registrar Compra</Button>
                         </CardFooter>
                     </Card>
@@ -458,7 +534,3 @@ export function AiImportStepper() {
         </>
     );
 }
-
-    
-
-    

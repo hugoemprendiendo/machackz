@@ -22,16 +22,10 @@ const InvoiceDetailsInputSchema = z.object({
 export type InvoiceDetailsInput = z.infer<typeof InvoiceDetailsInputSchema>;
 
 const InvoiceDetailsOutputSchema = z.object({
-  invoiceNumber: z.string().describe('The unique invoice number or ID.'),
-  date: z.string().describe('The date of the invoice in YYYY-MM-DD format.'),
-  items: z.array(
-    z.object({
-      name: z.string().describe('The name or description of the item.'),
-      sku: z.string().optional().describe('The SKU, product code, or key for the item.'),
-      quantity: z.number().describe('The quantity of the item purchased.'),
-      unitCost: z.number().describe('The cost or price per unit of the item.'),
-    })
-  ).describe('A list of all items purchased.'),
+  invoiceNumber: z.string().optional().describe('The unique invoice number or ID.'),
+  date: z.string().optional().describe('The date of the invoice in YYYY-MM-DD format.'),
+  headers: z.array(z.string()).describe('The detected headers for the line items table.'),
+  rows: z.array(z.array(z.string())).describe('The data rows for the line items, matching the headers.'),
 });
 export type InvoiceDetailsOutput = z.infer<typeof InvoiceDetailsOutputSchema>;
 
@@ -45,9 +39,8 @@ const prompt = ai.definePrompt({
   output: {schema: InvoiceDetailsOutputSchema},
   prompt: `You are an expert at extracting structured data from documents.
 Analyze the following invoice document.
-Extract the invoice number, the date, and a list of all line items.
-For each line item, provide its name/description, its SKU/code/key if available, the quantity, and the unit cost/price.
-Do NOT extract the supplier name.
+Extract the invoice number and the date.
+Then, extract all the line items as a table. Provide the detected column headers and then all the data rows.
 The date should be formatted as YYYY-MM-DD.
 
 Invoice Data:
