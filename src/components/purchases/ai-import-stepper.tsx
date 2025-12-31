@@ -422,10 +422,10 @@ export function AiImportStepper() {
                             <Table>
                                 <TableHeader><TableRow><TableHead>Producto</TableHead><TableHead>Cant.</TableHead><TableHead>Costo</TableHead><TableHead className="text-right">Subtotal</TableHead></TableRow></TableHeader>
                                 <TableBody>
-                                    {watchedItems.map(item => {
+                                    {watchedItems.map((item, index) => {
                                         const product = inventory.find(p => p.id === item.itemId);
                                         return (
-                                        <TableRow key={item.itemId}>
+                                        <TableRow key={`${item.itemId}-${index}`}>
                                             <TableCell>{product?.name}</TableCell>
                                             <TableCell>{item.quantity}</TableCell>
                                             <TableCell>${item.unitCost.toFixed(2)}</TableCell>
@@ -458,5 +458,7 @@ export function AiImportStepper() {
         </>
     );
 }
+
+    
 
     
