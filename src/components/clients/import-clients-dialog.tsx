@@ -29,7 +29,7 @@ interface ClientImportDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const clientFields = ['name', 'email', 'phone', 'address', 'source', 'notes'] as const;
+const clientFields = ['name', 'email', 'phone', 'address', 'taxId', 'cfdiUse', 'source', 'notes'] as const;
 type ClientField = typeof clientFields[number];
 
 type MappedFields = Partial<Record<ClientField, string>>;
@@ -42,6 +42,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
 
   const [step, setStep] = useState(1);
   const [csvData, setCsvData] = useState<{ headers: string[], rows: string[][] }>({ headers: [], rows: [] });
+  const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
@@ -50,6 +51,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
   const resetState = () => {
     setStep(1);
     setCsvData({ headers: [], rows: [] });
+    setFileName('');
     setError('');
     setIsImporting(false);
     setImportProgress(0);
@@ -95,8 +97,10 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
     
     const nameIndex = csvData.headers.indexOf(mappedFields.name!);
     const emailIndex = mappedFields.email ? csvData.headers.indexOf(mappedFields.email) : -1;
-    const phoneIndex = csvData.headers.indexOf(mappedFields.phone!);
+    const phoneIndex = mappedFields.phone ? csvData.headers.indexOf(mappedFields.phone) : -1;
     const addressIndex = mappedFields.address ? csvData.headers.indexOf(mappedFields.address) : -1;
+    const taxIdIndex = mappedFields.taxId ? csvData.headers.indexOf(mappedFields.taxId) : -1;
+    const cfdiUseIndex = mappedFields.cfdiUse ? csvData.headers.indexOf(mappedFields.cfdiUse) : -1;
     const sourceIndex = mappedFields.source ? csvData.headers.indexOf(mappedFields.source) : -1;
     const notesIndex = mappedFields.notes ? csvData.headers.indexOf(mappedFields.notes) : -1;
 
@@ -105,8 +109,11 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
       email: emailIndex > -1 ? row[emailIndex] : '',
       phone: phoneIndex > -1 ? row[phoneIndex] : '',
       address: addressIndex > -1 ? row[addressIndex] : '',
+      taxId: taxIdIndex > -1 ? row[taxIdIndex] : '',
+      cfdiUse: cfdiUseIndex > -1 ? row[cfdiUseIndex] : '',
       source: sourceIndex > -1 ? row[sourceIndex] : '',
       notes: notesIndex > -1 ? row[notesIndex] : '',
+      createdAt: new Date().toISOString(),
     }));
 
   }, [csvData, mappedFields]);
@@ -138,7 +145,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
   }
   
   const createCSVTemplate = () => {
-    const csvContent = "data:text/csv;charset=utf-8," + clientFields.filter(f => f !== 'notes').join(',') + '\n';
+    const csvContent = "data:text/csv;charset=utf-8," + clientFields.filter(f => f !== 'notes' && f !== 'createdAt').join(',') + '\n';
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -199,8 +206,10 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
         
         {step === 2 && (
             <div className='space-y-4'>
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                    {clientFields.map(field => (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    {clientFields.map(field => {
+                      if (field === 'createdAt') return null;
+                      return (
                         <div key={field} className="space-y-2">
                             <Label htmlFor={`map-${field}`} className="capitalize">
                                 {field} {field === 'name' || field === 'phone' ? '*' : ''}
@@ -210,11 +219,12 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
                                     <SelectValue placeholder="Seleccionar columna..." />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {csvData.headers.map(header => <SelectItem key={header} value={header}>{header}</SelectItem>)}
+                                    {csvData.headers.map((header, index) => <SelectItem key={`${header}-${index}`} value={header}>{header}</SelectItem>)}
                                 </SelectContent>
                             </Select>
                         </div>
-                    ))}
+                      )}
+                    )}
                 </div>
                 <div className="space-y-2">
                     <Label className="flex items-center gap-2">
@@ -223,7 +233,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
                     </Label>
                     <div className="w-full overflow-x-auto rounded-lg border">
                         <Table>
-                            <TableHeader><TableRow>{csvData.headers.map(h => <TableHead key={h}>{h}</TableHead>)}</TableRow></TableHeader>
+                            <TableHeader><TableRow>{csvData.headers.map((h, i) => <TableHead key={`${h}-${i}`}>{h}</TableHead>)}</TableRow></TableHeader>
                             <TableBody>{csvData.rows.slice(0,5).map((row, rIndex) => <TableRow key={rIndex}>{row.map((cell, cIndex) => <TableCell key={cIndex} className="whitespace-nowrap">{cell}</TableCell>)}</TableRow>)}</TableBody>
                         </Table>
                     </div>
@@ -244,6 +254,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
                             <TableHead>Nombre</TableHead>
                             <TableHead>Email</TableHead>
                             <TableHead>Teléfono</TableHead>
+                            <TableHead>RFC</TableHead>
                             <TableHead>Fuente</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -253,6 +264,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
                                 <TableCell>{client.name}</TableCell>
                                 <TableCell>{client.email}</TableCell>
                                 <TableCell>{client.phone}</TableCell>
+                                <TableCell>{client.taxId}</TableCell>
                                 <TableCell>{client.source}</TableCell>
                             </TableRow>
                         ))}
