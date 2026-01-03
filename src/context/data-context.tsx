@@ -85,6 +85,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSettings(JSON.parse(storedSettings));
     }
   }, []);
+  
+  const clients = useMemo(() => clientsData || [], [clientsData]);
+  const suppliers = useMemo(() => suppliersData || [], [suppliersData]);
+  const orders = useMemo(() => ordersData || [], [ordersData]);
+  const stockEntries = useMemo(() => stockEntriesData || [], [stockEntriesData]);
+  const expenses = useMemo(() => expensesData || [], [expensesData]);
 
   const inventory = useMemo(() => {
     return (inventoryData || []).map(item => ({
@@ -257,84 +263,82 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toast({ title: "Servicio Añadido", description: `${item.quantity} x ${product.name} añadido(s) a la orden.` });
       } else {
         // Handle physical items (stock consumption)
+        const lotsCollectionRef = collection(firestore, `inventory/${item.itemId}/stockLots`);
+        const lotsQuery = query(lotsCollectionRef, where("quantity", ">", 0), orderBy("createdAt", "asc"));
+        
         try {
-          const lotsCollectionRef = collection(firestore, `inventory/${item.itemId}/stockLots`);
-          const lotsQuery = query(lotsCollectionRef, where("quantity", ">", 0), orderBy("createdAt", "asc"));
-          const lotsSnapshot = await getDocs(lotsQuery);
-  
-          const availableStock = lotsSnapshot.docs.reduce((sum, doc) => sum + (doc.data() as StockLot).quantity, 0);
-          if (availableStock < item.quantity) {
-            throw new Error(`Stock insuficiente para ${product.name}. Se necesitan ${item.quantity}, pero solo hay ${availableStock} disponibles.`);
-          }
-  
-          let quantityNeeded = item.quantity;
-          const lotsToUpdate: { ref: DocumentReference<DocumentData>; consume: number; data: StockLot }[] = [];
-  
-          for (const lotDoc of lotsSnapshot.docs) {
-            if (quantityNeeded <= 0) break;
-            const lot = lotDoc.data() as StockLot;
-            const consume = Math.min(quantityNeeded, lot.quantity);
-            lotsToUpdate.push({ ref: lotDoc.ref, consume, data: lot });
-            quantityNeeded -= consume;
-          }
-  
-          await runTransaction(firestore, async (transaction) => {
-            // PHASE 1: READS
-            const orderRef = doc(firestore, "orders", orderId);
-            const productRef = doc(firestore, "inventory", item.itemId);
-            
-            const docsToRead = [orderRef, productRef, ...lotsToUpdate.map(l => l.ref)];
-            const docsSnapshot = await Promise.all(docsToRead.map(ref => transaction.get(ref)));
-            
-            const currentOrderDoc = docsSnapshot[0];
-            const currentProductDoc = docsSnapshot[1];
-            const lotDocsInTransaction = docsSnapshot.slice(2);
-  
-            if (!currentOrderDoc.exists()) throw new Error("La orden no existe.");
-            if (!currentProductDoc.exists()) throw new Error("El producto no existe.");
-  
-            // PHASE 2: LOGIC & PREPARE WRITES
-            const currentOrder = currentOrderDoc.data() as Order;
-            const currentProduct = currentProductDoc.data() as InventoryItem;
-            const newParts: OrderPart[] = [];
-            let totalStockConsumed = 0;
-  
-            for (let i = 0; i < lotsToUpdate.length; i++) {
-              const lotToUpdate = lotsToUpdate[i];
-              const lotDoc = lotDocsInTransaction[i];
-  
-              if (!lotDoc.exists() || (lotDoc.data() as StockLot).quantity < lotToUpdate.consume) {
-                throw new Error(`El stock del lote para ${product.name} cambió. Por favor, inténtalo de nuevo.`);
-              }
-              
-              newParts.push({
-                itemId: item.itemId,
-                name: product.name,
-                quantity: lotToUpdate.consume,
-                unitPrice: product.sellingPrice,
-                unitCost: lotToUpdate.data.costPrice,
-                taxRate: product.taxRate,
-                lotId: lotToUpdate.ref.id,
-              });
-              totalStockConsumed += lotToUpdate.consume;
+            const lotsSnapshot = await getDocs(lotsQuery);
+
+            const lotsToConsume = [];
+            let quantityNeeded = item.quantity;
+
+            for (const lotDoc of lotsSnapshot.docs) {
+                if (quantityNeeded <= 0) break;
+                const lotData = lotDoc.data() as StockLot;
+                const consume = Math.min(quantityNeeded, lotData.quantity);
+                lotsToConsume.push({ ref: lotDoc.ref, consume, data: lotData });
+                quantityNeeded -= consume;
             }
-  
-            // PHASE 3: WRITES
-            for (let i = 0; i < lotsToUpdate.length; i++) {
-              const lotToUpdate = lotsToUpdate[i];
-              const lotDoc = lotDocsInTransaction[i];
-              const currentLot = lotDoc.data() as StockLot;
-              transaction.update(lotToUpdate.ref, { quantity: currentLot.quantity - lotToUpdate.consume });
+
+            if (quantityNeeded > 0) {
+                throw new Error(`Stock insuficiente para ${product.name}. Se necesitan ${item.quantity}, pero solo hay ${item.quantity - quantityNeeded} disponibles.`);
             }
-  
-            transaction.update(orderRef, { parts: [...currentOrder.parts, ...newParts] });
-            transaction.update(productRef, { stock: currentProduct.stock - totalStockConsumed });
-          });
-  
-          toast({ title: "Parte(s) Añadida(s)", description: `${item.quantity} x ${product.name} añadido(s) a la orden.` });
+
+            await runTransaction(firestore, async (transaction) => {
+                // Phase 1: Reads
+                const orderRef = doc(firestore, "orders", orderId);
+                const productRef = doc(firestore, "inventory", item.itemId);
+
+                const docsToRead = [orderRef, productRef, ...lotsToConsume.map(l => l.ref)];
+                const docsSnapshot = await Promise.all(docsToRead.map(ref => transaction.get(ref)));
+                
+                const currentOrderDoc = docsSnapshot[0];
+                const currentProductDoc = docsSnapshot[1];
+                const lotDocsInTransaction = docsSnapshot.slice(2);
+
+                if (!currentOrderDoc.exists()) throw new Error("La orden no existe.");
+                if (!currentProductDoc.exists()) throw new Error("El producto no existe.");
+
+                // Phase 2: Logic and Writes
+                const currentOrder = currentOrderDoc.data() as Order;
+                const currentProduct = currentProductDoc.data() as InventoryItem;
+                const newParts: OrderPart[] = [];
+                let totalStockConsumed = 0;
+
+                for (let i = 0; i < lotsToConsume.length; i++) {
+                    const lotToUpdate = lotsToConsume[i];
+                    const lotDoc = lotDocsInTransaction[i];
+                    const currentLot = lotDoc.data() as StockLot;
+
+                    if (!lotDoc.exists() || currentLot.quantity < lotToUpdate.consume) {
+                        throw new Error(`El stock del lote para ${product.name} cambió. Por favor, inténtalo de nuevo.`);
+                    }
+
+                    newParts.push({
+                        itemId: item.itemId,
+                        name: product.name,
+                        quantity: lotToUpdate.consume,
+                        unitPrice: product.sellingPrice,
+                        unitCost: lotToUpdate.data.costPrice,
+                        taxRate: product.taxRate,
+                        lotId: lotToUpdate.ref.id,
+                    });
+                    totalStockConsumed += lotToUpdate.consume;
+
+                    // Write: Update Lot
+                    transaction.update(lotToUpdate.ref, { quantity: currentLot.quantity - lotToUpdate.consume });
+                }
+
+                // Write: Update Order and Product
+                transaction.update(orderRef, { parts: [...currentOrder.parts, ...newParts] });
+                transaction.update(productRef, { stock: currentProduct.stock - totalStockConsumed });
+            });
+
+            toast({ title: "Parte(s) Añadida(s)", description: `${item.quantity} x ${product.name} añadido(s) a la orden.` });
+
         } catch (e: any) {
-          console.error("Transaction failed: ", e);
-          toast({ variant: "destructive", title: "Error al añadir parte", description: e.message });
+            console.error("Transaction failed: ", e);
+            toast({ variant: "destructive", title: "Error al añadir parte", description: e.message });
         }
       }
     }
@@ -537,12 +541,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // #endregion
 
   const value = {
-    clients: clientsData || [],
-    suppliers: suppliersData || [],
-    inventory: inventory,
-    orders: ordersData || [],
-    stockEntries: stockEntriesData || [],
-    expenses: expensesData || [],
+    clients,
+    suppliers,
+    inventory,
+    orders,
+    stockEntries,
+    expenses,
     settings,
     isLoading,
     addClient,
@@ -589,6 +593,7 @@ export const useDataContext = () => {
     
 
     
+
 
 
 
