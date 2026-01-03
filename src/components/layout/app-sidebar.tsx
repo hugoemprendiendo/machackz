@@ -14,6 +14,7 @@ import {
   LineChart,
   Settings,
   Receipt,
+  Warehouse,
 } from "lucide-react";
 import React from "react";
 
@@ -34,7 +35,8 @@ import { useDataContext } from "@/context/data-context";
 const menuItems = [
     { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/orders", icon: Wrench, label: "Órdenes" },
-    { href: "/inventory", icon: Boxes, label: "Inventario", isLowStock: true },
+    { href: "/products", icon: Boxes, label: "Productos" },
+    { href: "/inventory", icon: Warehouse, label: "Inventario", isLowStock: true },
     { href: "/clients", icon: Users, label: "Clientes" },
     { href: "/suppliers", icon: Building2, label: "Proveedores" },
     { href: "/purchases", icon: ShoppingCart, label: "Compras" },
@@ -47,7 +49,7 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { inventory } = useDataContext();
 
-  const lowStockCount = inventory.filter(item => item.stock <= item.minStock).length;
+  const lowStockCount = inventory.filter(item => !item.isService && item.stock <= item.minStock).length;
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">
