@@ -157,9 +157,7 @@ function AddPartDialog({ orderId }: { orderId: string }) {
         
         await addMultiplePartsToOrder(orderId, itemsToAdd.map(i => ({ itemId: i.itemId, quantity: i.quantity })));
         
-        setItemsToAdd([]);
-        setSearchQuery("");
-        setIsOpen(false);
+        handleOpenChange(false);
     };
 
     const handleOpenChange = (open: boolean) => {
@@ -241,7 +239,7 @@ function AddPartDialog({ orderId }: { orderId: string }) {
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
+                    <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
                     <Button type="button" onClick={handleAddItemsToOrder} disabled={itemsToAdd.length === 0}><PlusCircle className="mr-2 h-4 w-4"/>Añadir {itemsToAdd.length > 0 ? `${itemsToAdd.length} Producto(s)` : ''}</Button>
                 </DialogFooter>
             </DialogContent>
