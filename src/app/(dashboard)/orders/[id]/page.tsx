@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from "react";
@@ -92,6 +91,8 @@ function AddPartDialog({ orderId }: { orderId: string }) {
     const { toast } = useToast();
     const [isOpen, setIsOpen] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState("");
+    const [selectedItem, setSelectedItem] = React.useState<InventoryItem | null>(null);
+    const [quantity, setQuantity] = React.useState(1);
     const [isAdding, setIsAdding] = React.useState(false);
 
     const filteredInventory = React.useMemo(() => {
@@ -103,32 +104,35 @@ function AddPartDialog({ orderId }: { orderId: string }) {
         );
     }, [inventory, searchQuery]);
 
-    const handleSelectProduct = async (item: InventoryItem) => {
+    const handleAddItem = async () => {
+        if (!selectedItem) return;
+
         setIsAdding(true);
-        if (!item.isService && item.stock <= 0) {
+        if (!selectedItem.isService && selectedItem.stock < quantity) {
             toast({
                 variant: 'destructive',
                 title: 'Sin Stock',
-                description: `El producto ${item.name} no tiene stock disponible.`
+                description: `No hay suficiente stock para ${selectedItem.name}. Necesitas ${quantity} pero solo hay ${selectedItem.stock}.`
             });
             setIsAdding(false);
             return;
         }
 
         try {
-            await addMultiplePartsToOrder(orderId, [{ itemId: item.id, quantity: 1 }]);
+            await addMultiplePartsToOrder(orderId, [{ itemId: selectedItem.id, quantity: quantity }]);
             handleOpenChange(false);
         } catch (error) {
-            // Error toast is handled in the context
             console.error("Error adding part to order:", error);
         } finally {
             setIsAdding(false);
         }
     };
-
+    
     const handleOpenChange = (open: boolean) => {
         if (!open) {
             setSearchQuery("");
+            setSelectedItem(null);
+            setQuantity(1);
         }
         setIsOpen(open);
     };
@@ -147,7 +151,10 @@ function AddPartDialog({ orderId }: { orderId: string }) {
                     <Input
                         placeholder="Buscar Producto..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setSelectedItem(null);
+                        }}
                         disabled={isAdding}
                     />
                     <ScrollArea className="h-64 border rounded-md">
@@ -156,8 +163,10 @@ function AddPartDialog({ orderId }: { orderId: string }) {
                                 filteredInventory.map(item => (
                                     <div
                                         key={item.id}
-                                        className="flex justify-between items-center p-2 rounded-md cursor-pointer hover:bg-muted"
-                                        onClick={() => !isAdding && handleSelectProduct(item)}
+                                        className={cn("flex justify-between items-center p-2 rounded-md cursor-pointer hover:bg-muted", {
+                                            "bg-muted": selectedItem?.id === item.id,
+                                        })}
+                                        onClick={() => setSelectedItem(item)}
                                     >
                                         <div>
                                             <div className="font-medium">{item.name}</div>
@@ -175,9 +184,28 @@ function AddPartDialog({ orderId }: { orderId: string }) {
                             )}
                         </div>
                     </ScrollArea>
+                    {selectedItem && (
+                        <div className="flex items-center gap-4 p-2 border rounded-lg bg-muted/50">
+                             <div className="flex-1">
+                                <Label htmlFor="quantity">Cantidad para <span className="font-semibold">{selectedItem.name}</span></Label>
+                                <Input
+                                    id="quantity"
+                                    type="number"
+                                    value={quantity}
+                                    onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                                    className="mt-1"
+                                    min="1"
+                                    max={selectedItem.isService ? undefined : selectedItem.stock}
+                                />
+                            </div>
+                            <Button onClick={handleAddItem} disabled={isAdding} className="mt-5">
+                                {isAdding ? 'Añadiendo...' : 'Añadir'}
+                            </Button>
+                        </div>
+                    )}
                 </div>
                 <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isAdding}>Cancelar</Button>
+                    <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isAdding}>Cerrar</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -449,3 +477,5 @@ export default function OrderDetailPage() {
     </>
   );
 }
+
+    
