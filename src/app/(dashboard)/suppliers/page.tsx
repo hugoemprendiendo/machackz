@@ -105,7 +105,7 @@ export default function SuppliersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre</TableHead>
-                  <TableHead>Categoría</TableHead>
+                  <TableHead>Marketplace</TableHead>
                   <TableHead>Contacto</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Teléfono</TableHead>
@@ -118,13 +118,12 @@ export default function SuppliersPage() {
                 {suppliers.map((supplier) => (
                   <TableRow key={supplier.id}>
                     <TableCell className="font-medium">
-                        {supplier.category === 'Marketplace' ? supplier.marketplaceName : supplier.name}
-                        {supplier.category === 'Marketplace' && supplier.name && <p className="text-xs text-muted-foreground">Vendedor: {supplier.name}</p>}
+                        {supplier.name}
                     </TableCell>
                     <TableCell>
-                        <Badge variant={supplier.category === 'Marketplace' ? 'secondary' : 'outline'}>
-                            {supplier.category || 'Proveedor Directo'}
-                        </Badge>
+                      {supplier.marketplaceName !== 'N/A' && (
+                        <Badge variant="secondary">{supplier.marketplaceName}</Badge>
+                      )}
                     </TableCell>
                     <TableCell>{supplier.contactName}</TableCell>
                     <TableCell>{supplier.email}</TableCell>
