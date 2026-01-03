@@ -42,7 +42,6 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
 
   const [step, setStep] = useState(1);
   const [csvData, setCsvData] = useState<{ headers: string[], rows: string[][] }>({ headers: [], rows: [] });
-  const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
@@ -51,7 +50,6 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
   const resetState = () => {
     setStep(1);
     setCsvData({ headers: [], rows: [] });
-    setFileName('');
     setError('');
     setIsImporting(false);
     setImportProgress(0);
@@ -145,7 +143,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
   }
   
   const createCSVTemplate = () => {
-    const csvContent = "data:text/csv;charset=utf-8," + clientFields.filter(f => f !== 'notes' && f !== 'createdAt').join(',') + '\n';
+    const csvContent = "data:text/csv;charset=utf-8," + clientFields.filter(f => f !== 'notes').join(',') + '\n';
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -206,9 +204,8 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
         
         {step === 2 && (
             <div className='space-y-4'>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                     {clientFields.map(field => {
-                      if (field === 'createdAt') return null;
                       return (
                         <div key={field} className="space-y-2">
                             <Label htmlFor={`map-${field}`} className="capitalize">
