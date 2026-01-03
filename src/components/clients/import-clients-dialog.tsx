@@ -2,8 +2,8 @@
 "use client";
 
 import React, { useState } from 'react';
-import { useCSVReader, readString } from 'react-papaparse';
-import { Upload, File, CheckCircle, AlertTriangle, X, ArrowLeft, ArrowRight, Wand2, Sparkles } from 'lucide-react';
+import { useCSVReader } from 'react-papaparse';
+import { Upload, File, CheckCircle, AlertTriangle, X, ArrowLeft, ArrowRight, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -76,7 +76,6 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
     const rows = fileData.slice(1).filter((row: any[]) => row.some(cell => cell && cell.trim() !== ''));
     
     setCsvData({ headers, rows });
-    setFileName(results.file.name);
     setStep(2);
     toast({ title: "Archivo Cargado", description: "Por favor, mapea las columnas del archivo." });
   };
@@ -302,5 +301,3 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
     </Dialog>
   );
 }
-
-    
