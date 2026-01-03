@@ -87,6 +87,10 @@ const ReadOnlyView = ({ purchase, inventory }: { purchase: StockEntry, inventory
   if (!purchase) {
     return null;
   }
+  
+  const date = parseISO(purchase.date);
+  const timezoneOffset = date.getTimezoneOffset();
+  const adjustedDate = new Date(date.valueOf() + timezoneOffset * 60 * 1000);
 
   return (
     <div className="flex flex-col gap-8">
@@ -115,7 +119,7 @@ const ReadOnlyView = ({ purchase, inventory }: { purchase: StockEntry, inventory
           </div>
           <div className="flex justify-between md:flex-col md:gap-1">
             <span className="text-muted-foreground">Fecha:</span>
-            <span>{format(parseISO(purchase.date), 'dd/MM/yyyy')}</span>
+            <span>{format(adjustedDate, 'dd/MM/yyyy')}</span>
           </div>
         </CardContent>
       </Card>
@@ -188,9 +192,13 @@ export default function PurchaseDetailsPage() {
 
     React.useEffect(() => {
         if (purchase) {
+            const date = parseISO(purchase.date);
+            const timezoneOffset = date.getTimezoneOffset();
+            const adjustedDate = new Date(date.valueOf() + timezoneOffset * 60 * 1000);
+            
             form.reset({
                 ...purchase,
-                date: format(parseISO(purchase.date), 'yyyy-MM-dd'),
+                date: format(adjustedDate, 'yyyy-MM-dd'),
             });
             replace(purchase.items.map(i => ({itemId: i.itemId, quantity: i.quantity, unitCost: i.unitCost})));
         }

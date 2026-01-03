@@ -124,34 +124,39 @@ export default function PurchasesPage() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {stockEntries.map((entry) => (
-                    <TableRow key={entry.id}>
-                        <TableCell className="font-medium">
-                            <Link href={`/purchases/${entry.id}`} className="text-primary hover:underline">
-                                {entry.invoiceNumber}
-                            </Link>
-                        </TableCell>
-                        <TableCell>{entry.supplierName}</TableCell>
-                        <TableCell>{format(parseISO(entry.date), "dd/MM/yyyy")}</TableCell>
-                        <TableCell className="text-right">${entry.totalCost.toFixed(2)}</TableCell>
-                        <TableCell>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">Toggle menu</span>
-                            </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => router.push(`/purchases/${entry.id}`)}>Ver/Editar Detalles</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DeletePurchaseDialog purchase={entry} onConfirm={() => handleDelete(entry)} />
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        </TableCell>
-                    </TableRow>
-                    ))}
+                    {stockEntries.map((entry) => {
+                        const date = parseISO(entry.date);
+                        const timezoneOffset = date.getTimezoneOffset();
+                        const adjustedDate = new Date(date.valueOf() + timezoneOffset * 60 * 1000);
+                        
+                        return (
+                        <TableRow key={entry.id}>
+                            <TableCell className="font-medium">
+                                <Link href={`/purchases/${entry.id}`} className="text-primary hover:underline">
+                                    {entry.invoiceNumber}
+                                </Link>
+                            </TableCell>
+                            <TableCell>{entry.supplierName}</TableCell>
+                            <TableCell>{format(adjustedDate, "dd/MM/yyyy")}</TableCell>
+                            <TableCell className="text-right">${entry.totalCost.toFixed(2)}</TableCell>
+                            <TableCell>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                <Button aria-haspopup="true" size="icon" variant="ghost">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                    <span className="sr-only">Toggle menu</span>
+                                </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => router.push(`/purchases/${entry.id}`)}>Ver/Editar Detalles</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DeletePurchaseDialog purchase={entry} onConfirm={() => handleDelete(entry)} />
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            </TableCell>
+                        </TableRow>
+                    )})}
                 </TableBody>
                 </Table>
             </CardContent>

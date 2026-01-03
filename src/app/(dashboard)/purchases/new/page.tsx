@@ -96,11 +96,16 @@ export default function NewPurchasePage() {
   const onSubmit = (data: PurchaseFormValues) => {
     const supplier = suppliers.find(s => s.id === data.supplierId);
     
+    // The selected date from the input is a string 'YYYY-MM-DD'.
+    // new Date('YYYY-MM-DD') creates a date at midnight UTC.
+    // To ensure it's stored as the user's local day, we create it with local timezone info.
+    const localDate = new Date(data.date + 'T00:00:00');
+
     const newStockEntry = {
         supplierId: data.supplierId,
         supplierName: supplier?.name || 'N/A',
         invoiceNumber: data.invoiceNumber || '',
-        date: new Date(data.date).toISOString(),
+        date: localDate.toISOString(),
         totalCost: totalCost,
         items: data.items.map(item => {
             const product = inventory.find(p => p.id === item.itemId);
