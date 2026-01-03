@@ -64,7 +64,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
     onOpenChange(isOpen);
   };
 
-  const handleUploadAccepted = (results: any, file: File) => {
+  const handleUploadAccepted = (results: any) => {
     setError('');
     const fileData = results.data;
     if (fileData.length < 2) {
@@ -75,7 +75,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
     const rows = fileData.slice(1).filter((row: any[]) => row.some(cell => cell && cell.trim() !== ''));
     
     setCsvData({ headers, rows });
-    setFileName(file.name);
+    setFileName(results.file?.name || 'Archivo cargado');
     setStep(2);
     toast({ title: "Archivo Cargado", description: "Por favor, mapea las columnas del archivo." });
   };
@@ -206,7 +206,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
         
         {step === 2 && (
             <div className='space-y-4'>
-                <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-4">
                     {clientFields.map(field => {
                       return (
                         <div key={field} className="space-y-2">
@@ -224,18 +224,6 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
                         </div>
                       )}
                     )}
-                </div>
-                <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4" />
-                        Vista Previa de los Datos (Primeras 5 filas)
-                    </Label>
-                    <div className="relative w-full overflow-x-auto rounded-lg border">
-                        <Table>
-                            <TableHeader><TableRow>{csvData.headers.map((h, i) => <TableHead key={`${h}-${i}`}>{h}</TableHead>)}</TableRow></TableHeader>
-                            <TableBody>{csvData.rows.slice(0,5).map((row, rIndex) => <TableRow key={rIndex}>{row.map((cell, cIndex) => <TableCell key={cIndex} className="whitespace-nowrap">{cell}</TableCell>)}</TableRow>)}</TableBody>
-                        </Table>
-                    </div>
                 </div>
             </div>
         )}
