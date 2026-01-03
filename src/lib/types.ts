@@ -40,6 +40,8 @@ export type Client = {
   createdAt: string;
 };
 
+export type SupplierCategory = 'Proveedor Directo' | 'Marketplace';
+
 export type Supplier = {
   id: string;
   name: string;
@@ -47,6 +49,8 @@ export type Supplier = {
   email: string;
   phone: string;
   taxId: string;
+  category?: SupplierCategory;
+  marketplaceName?: string;
 };
 
 export type OrderStatus =

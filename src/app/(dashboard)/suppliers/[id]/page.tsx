@@ -1,7 +1,8 @@
+
 "use client";
 
 import { useRouter, useParams } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ChevronLeft } from "lucide-react";
@@ -20,13 +21,17 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useDataContext } from "@/context/data-context";
 import Link from "next/link";
+import { SupplierCategory } from "@/lib/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const supplierFormSchema = z.object({
   name: z.string().min(3, "El nombre de la empresa es requerido."),
-  contactName: z.string().min(3, "El nombre del contacto es requerido."),
-  email: z.string().email("Por favor ingresa un email válido."),
-  phone: z.string().min(8, "El teléfono es requerido."),
-  taxId: z.string().min(10, "El ID Fiscal es requerido."),
+  contactName: z.string().optional(),
+  email: z.string().email("Por favor ingresa un email válido.").optional().or(z.literal('')),
+  phone: z.string().optional(),
+  taxId: z.string().optional(),
+  category: z.custom<SupplierCategory>(),
+  marketplaceName: z.string().optional(),
 });
 
 type SupplierFormValues = z.infer<typeof supplierFormSchema>;
@@ -41,12 +46,16 @@ export default function EditSupplierPage() {
 
   const form = useForm<SupplierFormValues>({
     resolver: zodResolver(supplierFormSchema),
-    defaultValues: supplier,
   });
+  
+  const category = form.watch("category");
 
   React.useEffect(() => {
     if (supplier) {
-      form.reset(supplier);
+      form.reset({
+        ...supplier,
+        category: supplier.category || 'Proveedor Directo',
+      });
     }
   }, [supplier, form]);
 
@@ -54,11 +63,12 @@ export default function EditSupplierPage() {
     if (supplier) {
         updateSupplier({
         id: supplier.id,
-        ...data
+        ...data,
+        marketplaceName: data.category === 'Marketplace' ? data.marketplaceName : '',
       });
       toast({
         title: "Proveedor Actualizado",
-        description: `La información del proveedor ${data.name} ha sido actualizada.`,
+        description: `La información del proveedor ha sido actualizada.`,
       });
       router.push("/suppliers");
     }
@@ -100,35 +110,80 @@ export default function EditSupplierPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6">
-             <div className="grid md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nombre de la Empresa</Label>
-                <Input id="name" {...form.register("name")} placeholder="Ej. PC Componentes Global" />
-                {form.formState.errors.name && <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="contactName">Nombre del Contacto</Label>
-                <Input id="contactName" {...form.register("contactName")} placeholder="Ej. Ana Lopez" />
-                {form.formState.errors.contactName && <p className="text-sm text-destructive">{form.formState.errors.contactName.message}</p>}
-              </div>
+             <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                    <Label htmlFor="category">Categoría de Proveedor</Label>
+                    <Controller
+                        control={form.control}
+                        name="category"
+                        render={({ field }) => (
+                            <Select onValueChange={field.onChange} value={field.value}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Seleccionar categoría..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Proveedor Directo">Proveedor Directo</SelectItem>
+                                    <SelectItem value="Marketplace">Marketplace</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        )}
+                    />
+                </div>
+                 {category === 'Marketplace' ? (
+                 <div className="space-y-2">
+                    <Label htmlFor="marketplaceName">Nombre del Marketplace</Label>
+                     <Controller
+                        control={form.control}
+                        name="marketplaceName"
+                        render={({ field }) => (
+                            <Select onValueChange={field.onChange} value={field.value}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Seleccionar marketplace..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Mercado Libre">Mercado Libre</SelectItem>
+                                    <SelectItem value="Amazon">Amazon</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        )}
+                    />
+                 </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nombre de la Empresa</Label>
+                  <Input id="name" {...form.register("name")} placeholder="Ej. PC Componentes Global" />
+                  {form.formState.errors.name && <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>}
+                </div>
+              )}
             </div>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" {...form.register("email")} placeholder="Ej. ventas@pcglobal.com" />
-                {form.formState.errors.email && <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Teléfono</Label>
-                <Input id="phone" {...form.register("phone")} placeholder="Ej. 800-555-0101" />
-                {form.formState.errors.phone && <p className="text-sm text-destructive">{form.formState.errors.phone.message}</p>}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="taxId">ID Fiscal (RFC/VAT ID)</Label>
-              <Input id="taxId" {...form.register("taxId")} placeholder="Ej. PCG123456XYZ" />
-              {form.formState.errors.taxId && <p className="text-sm text-destructive">{form.formState.errors.taxId.message}</p>}
-            </div>
+
+            {category === 'Proveedor Directo' ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="contactName">Nombre del Contacto (Opcional)</Label>
+                  <Input id="contactName" {...form.register("contactName")} placeholder="Ej. Ana Lopez" />
+                </div>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email (Opcional)</Label>
+                    <Input id="email" type="email" {...form.register("email")} placeholder="Ej. ventas@pcglobal.com" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Teléfono (Opcional)</Label>
+                    <Input id="phone" {...form.register("phone")} placeholder="Ej. 800-555-0101" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="taxId">ID Fiscal (RFC/VAT ID) (Opcional)</Label>
+                  <Input id="taxId" {...form.register("taxId")} placeholder="Ej. PCG123456XYZ" />
+                </div>
+              </>
+            ) : (
+                 <div className="space-y-2">
+                    <Label htmlFor="name">Nombre del Vendedor (Opcional)</Label>
+                    <Input id="name" {...form.register("name")} placeholder="Ej. Nombre del vendedor en el marketplace" />
+                </div>
+            )}
           </CardContent>
         </Card>
       </form>

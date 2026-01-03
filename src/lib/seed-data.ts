@@ -1,41 +1,76 @@
 
 
 import type { InventoryItem, Client, Supplier, Order, StockEntry } from './types';
+import { PlaceHolderImages } from './placeholder-images';
+
+// These are initial/fallback data and are not used when connected to Firebase.
+// To seed the database, use the "Seed Database" feature in the Settings page.
+
+export const clients: Client[] = [];
+export const suppliers: Supplier[] = [];
+export const inventory: InventoryItem[] = [];
+export const orders: Order[] = [];
+export const stockEntries: StockEntry[] = [];
+
+export const cfdiUses = [
+    { code: 'G01', description: 'Adquisición de mercancías' },
+    { code: 'G02', description: 'Devoluciones, descuentos o bonificaciones' },
+    { code: 'G03', description: 'Gastos en general' },
+    { code: 'I01', description: 'Construcciones' },
+    { code: 'I02', description: 'Mobiliario y equipo de oficina por inversiones' },
+    { code: 'I03', description: 'Equipo de transporte' },
+    { code: 'I04', description: 'Equipo de computo y accesorios' },
+    { code: 'I05', description: 'Dados, troqueles, moldes, matrices y herramental' },
+    { code: 'I06', description: 'Comunicaciones telefónicas' },
+    { code: 'I07', description: 'Comunicaciones satelitales' },
+    { code: 'I08', description: 'Otra maquinaria y equipo' },
+    { code: 'D01', description: 'Honorarios médicos, dentales y gastos hospitalarios' },
+    { code: 'D02', description: 'Gastos médicos por incapacidad o discapacidad' },
+    { code: 'D03', description: 'Gastos funerales' },
+    { code: 'D04', description: 'Donativos' },
+    { code: 'D05', description: 'Intereses reales efectivamente pagados por créditos hipotecarios (casa habitación)' },
+    { code: 'D06', description: 'Aportaciones voluntarias al SAR' },
+    { code: 'D07', description: 'Primas por seguros de gastos médicos' },
+    { code: 'D08', description: 'Gastos de transportación escolar obligatoria' },
+    { code: 'D09', description: 'Depósitos en cuentas para el ahorro, primas que tengan como base planes de pensiones' },
+    { code: 'D10', description: 'Pagos por servicios educativos (colegiaturas)' },
+    { code: 'S01', description: 'Sin efectos fiscales' },
+    { code: 'CP01', description: 'Pagos' },
+    { code: 'CN01', description: 'Nómina' },
+];
+
 
 export const seedClients: Omit<Client, 'id'>[] = [
-  { name: 'Juan Perez', email: 'juan.perez@example.com', phone: '+52 55 1234 5678', address: 'Calle Falsa 123, Ciudad de México', notes: 'Cliente frecuente, prefiere contacto por WhatsApp.', source: 'Recomendación'},
-  { name: 'Maria Garcia', email: 'maria.garcia@email.com', phone: '+34 91 234 56 78', address: 'Avenida Siempre Viva 456, Madrid', notes: '', source: 'Facebook'},
-  { name: 'Carlos Sanchez', email: 'carlos.sanchez@work.net', phone: '+1 305 555 0100', address: '123 Main St, Miami, FL', notes: 'Empresa. Solicita factura siempre.', source: 'Anuncio Local'},
-  { name: 'Ana Martínez', email: 'ana.martinez@email.com', phone: '+54 11 4567 8901', address: 'Av. Corrientes 1234, Buenos Aires', notes: '', source: 'Google'},
-  { name: 'Luisa Hernández', email: 'luisa.h@example.com', phone: '+57 1 2345678', address: 'Carrera 7 # 82-01, Bogotá', notes: 'Referida por Juan Perez.', source: 'Recomendación'},
-  { name: 'Jorge Rodríguez', email: 'jorge.r@me.com', phone: '+56 2 2345 6789', address: 'Apoquindo 3000, Santiago', notes: '', source: 'Google'},
-  { name: 'Sofia Lopez', email: 'sofia.lopez@email.com', phone: '+52 33 1234 5678', address: 'Av. Chapultepec 500, Guadalajara', notes: '', source: 'Facebook'},
-  { name: 'David Gómez', email: 'david.gomez@example.org', phone: '+52 81 8765 4321', address: 'Calzada del Valle 400, Monterrey', notes: 'Solo llamadas, no WhatsApp.', source: 'Anuncio Local'},
-  { name: 'Laura Torres', email: 'laura.t@work.net', phone: '+1 212 555 0199', address: '45 Rockefeller Plaza, New York, NY', notes: 'Asistente personal: Clara.', source: 'Recomendación'},
-  { name: 'Miguel Angel', email: 'miguel.angel@email.com', phone: '+34 93 345 67 89', address: 'Passeig de Gràcia 92, Barcelona', notes: '', source: 'Instagram'},
-  { name: 'Valentina Rojas', email: 'valentina.r@example.com', phone: '+54 351 456 7890', address: 'Bv. San Juan 123, Córdoba', notes: '', source: 'Google'},
-  { name: 'Javier Moreno', email: 'javier.moreno@me.com', phone: '+57 4 321 8765', address: 'El Poblado, Medellín', notes: '', source: 'Facebook'},
-  { name: 'Camila Díaz', email: 'camila.diaz@email.com', phone: '+56 9 8765 4321', address: 'Av. del Mar 4300, La Serena', notes: 'Estudiante.', source: 'Recomendación'},
-  { name: 'Ricardo Castillo', email: 'ricardo.c@example.com', phone: '+52 55 8765 4321', address: 'Paseo de la Reforma 222, CDMX', notes: '', source: 'Google'},
-  { name: 'Gabriela Ortiz', email: 'gabriela.o@work.net', phone: '+1 415 555 0111', address: '1 Infinite Loop, Cupertino, CA', notes: 'Cliente corporativo.', source: 'Recomendación'},
-  { name: 'Francisco Vargas', email: 'francisco.v@email.com', phone: '+34 95 456 78 90', address: 'Calle Sierpes 50, Sevilla', notes: '', source: 'Anuncio Local'},
-  { name: 'Daniela Flores', email: 'daniela.f@example.com', phone: '+52 442 123 4567', address: 'Av. Constituyentes 100, Querétaro', notes: '', source: 'Instagram'},
-  { name: 'Andrés Navarro', email: 'andres.n@me.com', phone: '+54 221 456 7890', address: 'Calle 8 789, La Plata', notes: '', source: 'Google'},
-  { name: 'Paula Silva', email: 'paula.silva@email.com', phone: '+57 310 1234567', address: 'Bocagrande, Cartagena', notes: 'Turista, necesita reparación rápida.', source: 'Recomendación'},
-  { name: 'Esteban Mendoza', email: 'esteban.m@example.org', phone: '+56 32 234 5678', address: 'Cerro Alegre, Valparaíso', notes: '', source: 'Facebook'},
-  { name: 'Carolina Romano', email: 'caro.romano@gmail.com', phone: '+52 998 876 5432', address: 'Blvd. Kukulcan Km 14, Cancún', notes: '', source: 'Google'},
-  { name: 'Fernando Iglesias', email: 'fer.iglesias@hotmail.com', phone: '+34 91 876 5432', address: 'Calle Gran Vía 28, Madrid', notes: 'VIP. Prioridad alta.', source: 'Recomendación'},
+  { name: 'Juan Perez', email: 'juan.perez@example.com', phone: '+52 55 1234 5678', address: 'Calle Falsa 123, Ciudad de México', notes: 'Cliente frecuente, prefiere contacto por WhatsApp.', source: 'Recomendación', createdAt: new Date().toISOString()},
+  { name: 'Maria Garcia', email: 'maria.garcia@email.com', phone: '+34 91 234 56 78', address: 'Avenida Siempre Viva 456, Madrid', notes: '', source: 'Facebook', createdAt: new Date().toISOString()},
+  { name: 'Carlos Sanchez', email: 'carlos.sanchez@work.net', phone: '+1 305 555 0100', address: '123 Main St, Miami, FL', notes: 'Empresa. Solicita factura siempre.', source: 'Anuncio Local', createdAt: new Date().toISOString()},
+  { name: 'Ana Martínez', email: 'ana.martinez@email.com', phone: '+54 11 4567 8901', address: 'Av. Corrientes 1234, Buenos Aires', notes: '', source: 'Google', createdAt: new Date().toISOString()},
+  { name: 'Luisa Hernández', email: 'luisa.h@example.com', phone: '+57 1 2345678', address: 'Carrera 7 # 82-01, Bogotá', notes: 'Referida por Juan Perez.', source: 'Recomendación', createdAt: new Date().toISOString()},
+  { name: 'Jorge Rodríguez', email: 'jorge.r@me.com', phone: '+56 2 2345 6789', address: 'Apoquindo 3000, Santiago', notes: '', source: 'Google', createdAt: new Date().toISOString()},
+  { name: 'Sofia Lopez', email: 'sofia.lopez@email.com', phone: '+52 33 1234 5678', address: 'Av. Chapultepec 500, Guadalajara', notes: '', source: 'Facebook', createdAt: new Date().toISOString()},
+  { name: 'David Gómez', email: 'david.gomez@example.org', phone: '+52 81 8765 4321', address: 'Calzada del Valle 400, Monterrey', notes: 'Solo llamadas, no WhatsApp.', source: 'Anuncio Local', createdAt: new Date().toISOString()},
+  { name: 'Laura Torres', email: 'laura.t@work.net', phone: '+1 212 555 0199', address: '45 Rockefeller Plaza, New York, NY', notes: 'Asistente personal: Clara.', source: 'Recomendación', createdAt: new Date().toISOString()},
+  { name: 'Miguel Angel', email: 'miguel.angel@email.com', phone: '+34 93 345 67 89', address: 'Passeig de Gràcia 92, Barcelona', notes: '', source: 'Instagram', createdAt: new Date().toISOString()},
+  { name: 'Valentina Rojas', email: 'valentina.r@example.com', phone: '+54 351 456 7890', address: 'Bv. San Juan 123, Córdoba', notes: '', source: 'Google', createdAt: new Date().toISOString()},
+  { name: 'Javier Moreno', email: 'javier.moreno@me.com', phone: '+57 4 321 8765', address: 'El Poblado, Medellín', notes: '', source: 'Facebook', createdAt: new Date().toISOString()},
+  { name: 'Camila Díaz', email: 'camila.diaz@email.com', phone: '+56 9 8765 4321', address: 'Av. del Mar 4300, La Serena', notes: 'Estudiante.', source: 'Recomendación', createdAt: new Date().toISOString()},
+  { name: 'Ricardo Castillo', email: 'ricardo.c@example.com', phone: '+52 55 8765 4321', address: 'Paseo de la Reforma 222, CDMX', notes: '', source: 'Google', createdAt: new Date().toISOString()},
+  { name: 'Gabriela Ortiz', email: 'gabriela.o@work.net', phone: '+1 415 555 0111', address: '1 Infinite Loop, Cupertino, CA', notes: 'Cliente corporativo.', source: 'Recomendación', createdAt: new Date().toISOString()},
+  { name: 'Francisco Vargas', email: 'francisco.v@email.com', phone: '+34 95 456 78 90', address: 'Calle Sierpes 50, Sevilla', notes: '', source: 'Anuncio Local', createdAt: new Date().toISOString()},
+  { name: 'Daniela Flores', email: 'daniela.f@example.com', phone: '+52 442 123 4567', address: 'Av. Constituyentes 100, Querétaro', notes: '', source: 'Instagram', createdAt: new Date().toISOString()},
+  { name: 'Andrés Navarro', email: 'andres.n@me.com', phone: '+54 221 456 7890', address: 'Calle 8 789, La Plata', notes: '', source: 'Google', createdAt: new Date().toISOString()},
+  { name: 'Paula Silva', email: 'paula.silva@email.com', phone: '+57 310 1234567', address: 'Bocagrande, Cartagena', notes: 'Turista, necesita reparación rápida.', source: 'Recomendación', createdAt: new Date().toISOString()},
+  { name: 'Esteban Mendoza', email: 'esteban.m@example.org', phone: '+56 32 234 5678', address: 'Cerro Alegre, Valparaíso', notes: '', source: 'Facebook', createdAt: new Date().toISOString()},
+  { name: 'Carolina Romano', email: 'caro.romano@gmail.com', phone: '+52 998 876 5432', address: 'Blvd. Kukulcan Km 14, Cancún', notes: '', source: 'Google', createdAt: new Date().toISOString()},
+  { name: 'Fernando Iglesias', email: 'fer.iglesias@hotmail.com', phone: '+34 91 876 5432', address: 'Calle Gran Vía 28, Madrid', notes: 'VIP. Prioridad alta.', source: 'Recomendación', createdAt: new Date().toISOString()},
 ];
 
 export const seedSuppliers: Omit<Supplier, 'id'>[] = [
-  { name: 'PC Componentes Global', contactName: 'Ana Lopez', email: 'ventas@pcglobal.com', phone: '800-555-0101', taxId: 'PCG123456XYZ'},
-  { name: 'Importaciones Tech', contactName: 'Roberto Hernandez', email: 'roberto@import.tech', phone: '800-555-0102', taxId: 'ITECH789012ABC'},
-  { name: 'Bits & Parts', contactName: 'Laura Jimenez', email: 'laura.j@bits-parts.com', phone: '800-555-0103', taxId: 'BAP456789DEF'},
-  { name: 'Gadget Supply Co.', contactName: 'David Chen', email: 'sales@gadgetsupply.co', phone: '800-555-0104', taxId: 'GSC789012GHI'},
-  { name: 'Pantallas Pro', contactName: 'Sofia Rossi', email: 'sofia@pantallaspro.it', phone: '800-555-0105', taxId: 'PPRO012345JKL'},
-  { name: 'Mega Electronica', contactName: 'Carlos Vega', email: 'carlos.vega@megaelectronica.com', phone: '800-555-0106', taxId: 'MEG567890MNO'},
-  { name: 'Chip World', contactName: 'Maria Kim', email: 'm.kim@chip.world', phone: '800-555-0107', taxId: 'CHW901234PQR'},
-  { name: 'Todo Baterías', contactName: 'Ernesto Rios', email: 'ernesto@todobaterias.mx', phone: '800-555-0108', taxId: 'TBA345678STU'},
+  { name: 'PC Componentes Global', contactName: 'Ana Lopez', email: 'ventas@pcglobal.com', phone: '800-555-0101', taxId: 'PCG123456XYZ', category: 'Proveedor Directo'},
+  { name: 'Importaciones Tech', contactName: 'Roberto Hernandez', email: 'roberto@import.tech', phone: '800-555-0102', taxId: 'ITECH789012ABC', category: 'Proveedor Directo'},
+  { name: 'Bits & Parts', contactName: 'Laura Jimenez', email: 'laura.j@bits-parts.com', phone: '800-555-0103', taxId: 'BAP456789DEF', category: 'Proveedor Directo'},
+  { name: 'Vendedor XYZ', contactName: '', email: '', phone: '', taxId: '', category: 'Marketplace', marketplaceName: 'Mercado Libre'},
+  { name: 'Tienda Oficial ABC', contactName: '', email: '', phone: '', taxId: '', category: 'Marketplace', marketplaceName: 'Amazon'},
 ];
 
 export const seedInventory: Omit<InventoryItem, 'id'>[] = [
@@ -108,37 +143,37 @@ export const seedOrders: any[] = [
 
 export const seedStockEntries: any[] = [
   { supplierId: 'sup-001', supplierName: 'PC Componentes Global', invoiceNumber: 'FAC-2024-580', date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(), items: [
-      { itemId: 'inv-001', name: 'SSD 1TB Kingston', quantity: 10, unitCost: 50.0, hasTax: true, taxRate: 16 },
-      { itemId: 'inv-002', name: 'RAM 16GB DDR4 Corsair', quantity: 5, unitCost: 60.0, hasTax: true, taxRate: 16 },
-      { itemId: 'inv-004', name: 'Teclado USB Logitech', quantity: 10, unitCost: 15.0, hasTax: true, taxRate: 16 }
+      { itemId: 'inv-001', sku: 'KNG-SSD-1TB', name: 'SSD 1TB Kingston', quantity: 10, unitCost: 50.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-002', sku: 'CRS-DDR4-16GB', name: 'RAM 16GB DDR4 Corsair', quantity: 5, unitCost: 60.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-004', sku: 'LOG-K120', name: 'Teclado USB Logitech', quantity: 10, unitCost: 15.0, hasTax: true, taxRate: 16 }
     ],
   },
   { supplierId: 'sup-002', supplierName: 'Importaciones Tech', invoiceNumber: 'INV-IT-9912', date: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(), items: [
-      { itemId: 'inv-003', name: 'Pantalla LCD 15.6" Laptop', quantity: 5, unitCost: 75.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-003', sku: 'LCD-156-GEN', name: 'Pantalla LCD 15.6" Laptop', quantity: 5, unitCost: 75.0, hasTax: true, taxRate: 16 },
     ],
   },
    { supplierId: 'sup-004', supplierName: 'Gadget Supply Co.', invoiceNumber: 'GS-54321', date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), items: [
-      { itemId: 'inv-005', name: 'Batería MacBook Pro 2019', quantity: 5, unitCost: 90.0, hasTax: true, taxRate: 16 },
-      { itemId: 'inv-008', name: 'Display iPhone 12', quantity: 2, unitCost: 100.0, hasTax: true, taxRate: 16 },
-      { itemId: 'inv-009', name: 'Cargador USB-C 65W', quantity: 12, unitCost: 20.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-005', sku: 'BAT-MBP19', name: 'Batería MacBook Pro 2019', quantity: 5, unitCost: 90.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-008', sku: 'DIS-IP12', name: 'Display iPhone 12', quantity: 2, unitCost: 100.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-009', sku: 'CHG-USBC65', name: 'Cargador USB-C 65W', quantity: 12, unitCost: 20.0, hasTax: true, taxRate: 16 },
     ],
   },
   { supplierId: 'sup-003', supplierName: 'Bits & Parts', invoiceNumber: 'BP-2024-05-112', date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), items: [
-      { itemId: 'inv-006', name: 'SSD M.2 512GB WD', quantity: 10, unitCost: 40.0, hasTax: true, taxRate: 16 },
-      { itemId: 'inv-010', name: 'Ventilador CPU Cooler Master', quantity: 12, unitCost: 12.0, hasTax: true, taxRate: 16 },
-      { itemId: 'inv-015', name: 'RAM 8GB DDR4 Kingston', quantity: 8, unitCost: 35.0, hasTax: true, taxRate: 16 },
-      { itemId: 'inv-016', name: 'Disco Duro 2TB Seagate', quantity: 4, unitCost: 45.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-006', sku: 'WD-M2-512', name: 'SSD M.2 512GB WD', quantity: 10, unitCost: 40.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-010', sku: 'CM-FAN-120', name: 'Ventilador CPU Cooler Master', quantity: 12, unitCost: 12.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-015', sku: 'KNG-DDR4-8GB', name: 'RAM 8GB DDR4 Kingston', quantity: 8, unitCost: 35.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-016', sku: 'SGT-HDD-2TB', name: 'Disco Duro 2TB Seagate', quantity: 4, unitCost: 45.0, hasTax: true, taxRate: 16 },
     ],
   },
   { supplierId: 'sup-008', supplierName: 'Todo Baterías', invoiceNumber: 'TB-FACT-889', date: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString(), items: [
-      { itemId: 'inv-017', name: 'Batería Dell XPS 15', quantity: 5, unitCost: 85.0, hasTax: true, taxRate: 16 },
-      { itemId: 'inv-025', name: 'Batería iPhone 11', quantity: 10, unitCost: 40.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-017', sku: 'BAT-XPS15', name: 'Batería Dell XPS 15', quantity: 5, unitCost: 85.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-025', sku: 'BAT-IP11', name: 'Batería iPhone 11', quantity: 10, unitCost: 40.0, hasTax: true, taxRate: 16 },
     ],
   },
   { supplierId: 'sup-007', supplierName: 'Chip World', invoiceNumber: 'CW-INTL-453', date: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000).toISOString(), items: [
-      { itemId: 'inv-029', name: 'Motherboard B550M Aorus', quantity: 5, unitCost: 120.0, hasTax: true, taxRate: 16 },
-      { itemId: 'inv-030', name: 'Procesador AMD Ryzen 5 5600X', quantity: 6, unitCost: 150.0, hasTax: true, taxRate: 16 },
-      { itemId: 'inv-019', name: 'Tarjeta de Video NVIDIA 3060', quantity: 1, unitCost: 350.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-029', sku: 'GIGA-B550M', name: 'Motherboard B550M Aorus', quantity: 5, unitCost: 120.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-030', sku: 'AMD-R5-5600X', name: 'Procesador AMD Ryzen 5 5600X', quantity: 6, unitCost: 150.0, hasTax: true, taxRate: 16 },
+      { itemId: 'inv-019', sku: 'NV-3060', name: 'Tarjeta de Video NVIDIA 3060', quantity: 1, unitCost: 350.0, hasTax: true, taxRate: 16 },
     ],
   },
 ];

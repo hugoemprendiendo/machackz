@@ -43,6 +43,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import type { Supplier } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
 
 
 function DeleteSupplierDialog({ supplier, onConfirm, children }: { supplier: Supplier, onConfirm: () => void, children: React.ReactNode }) {
@@ -97,17 +98,17 @@ export default function SuppliersPage() {
         <Card>
           <CardHeader>
             <CardTitle>Lista de Proveedores</CardTitle>
-            <CardDescription>Empresas a las que les compras mercancía.</CardDescription>
+            <CardDescription>Empresas y marketplaces a las que les compras mercancía.</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre Empresa</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Categoría</TableHead>
                   <TableHead>Contacto</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Teléfono</TableHead>
-                  <TableHead>ID Fiscal</TableHead>
                   <TableHead>
                     <span className="sr-only">Acciones</span>
                   </TableHead>
@@ -116,11 +117,18 @@ export default function SuppliersPage() {
               <TableBody>
                 {suppliers.map((supplier) => (
                   <TableRow key={supplier.id}>
-                    <TableCell className="font-medium">{supplier.name}</TableCell>
+                    <TableCell className="font-medium">
+                        {supplier.category === 'Marketplace' ? supplier.marketplaceName : supplier.name}
+                        {supplier.category === 'Marketplace' && supplier.name && <p className="text-xs text-muted-foreground">Vendedor: {supplier.name}</p>}
+                    </TableCell>
+                    <TableCell>
+                        <Badge variant={supplier.category === 'Marketplace' ? 'secondary' : 'outline'}>
+                            {supplier.category || 'Proveedor Directo'}
+                        </Badge>
+                    </TableCell>
                     <TableCell>{supplier.contactName}</TableCell>
                     <TableCell>{supplier.email}</TableCell>
                     <TableCell>{supplier.phone}</TableCell>
-                    <TableCell>{supplier.taxId}</TableCell>
                     <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -151,4 +159,3 @@ export default function SuppliersPage() {
     </div>
   );
 }
-

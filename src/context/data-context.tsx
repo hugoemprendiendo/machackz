@@ -230,10 +230,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     where("purchaseId", "==", entryId)
                 );
                 
-                // Firestore transactions require reads to happen via the transaction object.
-                // We cannot use getDocs directly. We must assume a single lot per purchase for this logic.
-                // A better approach would be to store lot IDs in the StockEntryItem. For now, we query outside then read in transaction.
-                // This is a simplification and might fail if multiple lots are created for the same purchaseId in the same item, which shouldn't happen with current logic.
                 const lotSnapshot = await getDocs(lotsQuery);
                 const lotDocRef = lotSnapshot.docs[0]?.ref;
 
@@ -243,15 +239,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     lotDocRef,
                 };
             }));
-
+            
             const productsAndLots = await Promise.all(
-              itemsWithRefs.map(async item => {
-                if (!item.lotDocRef) return { item, productDoc: null, lotDoc: null };
-                const productDoc = await transaction.get(item.productRef);
-                const lotDoc = await transaction.get(item.lotDocRef);
-                return { item, productDoc, lotDoc };
-              })
+              itemsWithRefs
+                .filter(item => item.lotDocRef) // Filter out items where no lot was found
+                .map(async item => {
+                    const productDoc = await transaction.get(item.productRef);
+                    const lotDoc = await transaction.get(item.lotDocRef!);
+                    return { item, productDoc, lotDoc };
+                })
             );
+
 
             // Phase 2: Validation
             for (const { item, productDoc, lotDoc } of productsAndLots) {
@@ -432,22 +430,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (!currentOrder) return;
 
-    // Find the specific index of the part to remove
-    const partIndex = currentOrder.parts.findIndex(p => p.itemId === itemId && p.lotId === lotId);
+    const partIndex = currentOrder.parts.findIndex(
+      (p) => p.itemId === itemId && p.lotId === lotId && p.quantity === quantity
+    );
 
     if (partIndex === -1) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar la parte para eliminar.' });
         return;
     }
     
-    // Create new array by removing only the item at the found index
     const updatedParts = [
         ...currentOrder.parts.slice(0, partIndex),
         ...currentOrder.parts.slice(partIndex + 1),
     ];
 
     if (!product || product.isService || lotId === 'SERVICE') {
-        // If it's a service or has no valid lot, just update the order parts array
         updateDocumentNonBlocking(orderRef, { parts: updatedParts });
         return;
     }
@@ -467,11 +464,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const currentProduct = currentProductDoc.data() as InventoryItem;
 
             if (lotDoc.exists()) {
-                // Lot exists, just add the quantity back
                 const currentLot = lotDoc.data() as StockLot;
                 transaction.update(lotRef, { quantity: currentLot.quantity + quantity });
             } else {
-                // Lot was fully consumed, we need to re-create it
                  const newLot: Omit<StockLot, 'id' | 'createdAt'> = {
                     purchaseId: `RETURN-ORD-${orderId}`,
                     purchaseDate: new Date().toISOString(),
@@ -482,11 +477,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 };
                  transaction.set(lotRef, {...newLot, createdAt: serverTimestamp()});
             }
-
-            // Update cached stock on product
             transaction.update(productRef, { stock: currentProduct.stock + quantity });
-
-            // Update order with the precisely modified parts array
             transaction.update(orderRef, { parts: updatedParts });
         });
         toast({ title: 'Parte Devuelta', description: 'La parte ha sido devuelta al inventario.' });
@@ -682,6 +673,7 @@ export const useDataContext = () => {
     
 
     
+
 
 
 
