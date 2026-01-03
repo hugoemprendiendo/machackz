@@ -21,6 +21,8 @@ import { useDataContext } from "@/context/data-context";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import React from 'react';
+import { Button } from "@/components/ui/button";
+import { Wrench } from "lucide-react";
 
 export default function InventoryStockPage() {
   const { inventory } = useDataContext();
@@ -37,6 +39,12 @@ export default function InventoryStockPage() {
                 <h1 className="text-3xl font-headline font-bold tracking-tight">Inventario de Stock</h1>
                 <p className="text-muted-foreground">Consulta el stock físico disponible y su valor.</p>
             </div>
+            <Button asChild variant="outline">
+              <Link href="/inventory/in-orders">
+                <Wrench className="mr-2 h-4 w-4" />
+                Ver Inventario en Órdenes Abiertas
+              </Link>
+            </Button>
         </div>
       <Card>
         <CardHeader>
