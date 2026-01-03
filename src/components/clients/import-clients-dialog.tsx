@@ -21,7 +21,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Progress } from '../ui/progress';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 
 interface ClientImportDialogProps {
   children: React.ReactNode;
@@ -46,6 +45,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [mappedFields, setMappedFields] = useState<MappedFields>({});
+  const [fileName, setFileName] = useState('');
 
   const resetState = () => {
     setStep(1);
@@ -54,6 +54,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
     setIsImporting(false);
     setImportProgress(0);
     setMappedFields({});
+    setFileName('');
   };
   
   const handleDialogChange = (isOpen: boolean) => {
@@ -63,7 +64,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
     onOpenChange(isOpen);
   };
 
-  const handleUploadAccepted = (results: any) => {
+  const handleUploadAccepted = (results: any, file: File) => {
     setError('');
     const fileData = results.data;
     if (fileData.length < 2) {
@@ -74,6 +75,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
     const rows = fileData.slice(1).filter((row: any[]) => row.some(cell => cell && cell.trim() !== ''));
     
     setCsvData({ headers, rows });
+    setFileName(file.name);
     setStep(2);
     toast({ title: "Archivo Cargado", description: "Por favor, mapea las columnas del archivo." });
   };
@@ -170,7 +172,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
             onDragOver={(event: DragEvent) => { event.preventDefault(); }}
             onDragLeave={(event: DragEvent) => { event.preventDefault(); }}
           >
-            {({ getRootProps, acceptedFile, getRemoveFileProps }: any) => (
+            {({ getRootProps, acceptedFile, getRemoveFileProps, Dragging }: any) => (
               <div {...getRootProps()} className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-muted rounded-lg text-center my-4 cursor-pointer hover:border-primary hover:bg-muted/50 transition-colors">
                 <Upload className="h-12 w-12 text-gray-400" />
                 <p className="mt-4 text-gray-600">
@@ -179,11 +181,11 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
                 <p className="text-xs text-muted-foreground mt-1">
                   Asegúrate de que el archivo tenga una fila de encabezados.
                 </p>
-                {acceptedFile && (
+                {fileName && (
                     <div className="mt-4 flex items-center gap-2 bg-gray-100 p-2 rounded-md dark:bg-muted/50">
                         <File className="h-5 w-5 text-gray-500" />
-                        <span className="text-sm">{acceptedFile.name}</span>
-                        <button {...getRemoveFileProps()} className="ml-2 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-muted">
+                        <span className="text-sm">{fileName}</span>
+                        <button {...getRemoveFileProps()} onClick={(e) => {e.stopPropagation(); resetState();}} className="ml-2 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-muted">
                             <X className="h-4 w-4" />
                         </button>
                     </div>
@@ -204,7 +206,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
         
         {step === 2 && (
             <div className='space-y-4'>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                <div className="space-y-4">
                     {clientFields.map(field => {
                       return (
                         <div key={field} className="space-y-2">
@@ -228,11 +230,11 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
                         <Sparkles className="h-4 w-4" />
                         Vista Previa de los Datos (Primeras 5 filas)
                     </Label>
-                    <div className="relative w-full overflow-auto rounded-lg border">
-                      <Table>
-                          <TableHeader><TableRow>{csvData.headers.map((h, i) => <TableHead key={`${h}-${i}`}>{h}</TableHead>)}</TableRow></TableHeader>
-                          <TableBody>{csvData.rows.slice(0,5).map((row, rIndex) => <TableRow key={rIndex}>{row.map((cell, cIndex) => <TableCell key={cIndex} className="whitespace-nowrap">{cell}</TableCell>)}</TableRow>)}</TableBody>
-                      </Table>
+                    <div className="relative w-full overflow-x-auto rounded-lg border">
+                        <Table>
+                            <TableHeader><TableRow>{csvData.headers.map((h, i) => <TableHead key={`${h}-${i}`}>{h}</TableHead>)}</TableRow></TableHeader>
+                            <TableBody>{csvData.rows.slice(0,5).map((row, rIndex) => <TableRow key={rIndex}>{row.map((cell, cIndex) => <TableCell key={cIndex} className="whitespace-nowrap">{cell}</TableCell>)}</TableRow>)}</TableBody>
+                        </Table>
                     </div>
                 </div>
             </div>
