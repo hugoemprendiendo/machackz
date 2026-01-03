@@ -87,82 +87,47 @@ const allOrderStatuses: OrderStatus[] = [
     'Cancelada'
 ];
 
-interface ItemToAdd {
-  itemId: string;
-  name: string;
-  quantity: number;
-  stock: number;
-  sellingPrice: number;
-  isService: boolean;
-}
-
 function AddPartDialog({ orderId }: { orderId: string }) {
     const { addMultiplePartsToOrder, inventory } = useDataContext();
     const { toast } = useToast();
     const [isOpen, setIsOpen] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState("");
-    const [itemsToAdd, setItemsToAdd] = React.useState<ItemToAdd[]>([]);
+    const [isAdding, setIsAdding] = React.useState(false);
 
     const filteredInventory = React.useMemo(() => {
+        if (!searchQuery) return [];
         const lowercasedQuery = searchQuery.toLowerCase();
-        const currentItemIds = new Set(itemsToAdd.map(i => i.itemId));
         return inventory.filter(item =>
-            !currentItemIds.has(item.id) &&
-            (item.name.toLowerCase().includes(lowercasedQuery) || item.sku?.toLowerCase().includes(lowercasedQuery))
+            item.name.toLowerCase().includes(lowercasedQuery) || 
+            item.sku?.toLowerCase().includes(lowercasedQuery)
         );
-    }, [inventory, searchQuery, itemsToAdd]);
+    }, [inventory, searchQuery]);
 
-    const handleSelectProduct = (item: InventoryItem) => {
+    const handleSelectProduct = async (item: InventoryItem) => {
+        setIsAdding(true);
         if (!item.isService && item.stock <= 0) {
             toast({
                 variant: 'destructive',
                 title: 'Sin Stock',
                 description: `El producto ${item.name} no tiene stock disponible.`
             });
+            setIsAdding(false);
             return;
         }
-        setItemsToAdd(prev => [...prev, { 
-            itemId: item.id, 
-            name: item.name, 
-            quantity: 1, 
-            stock: item.stock, 
-            sellingPrice: item.sellingPrice,
-            isService: item.isService 
-        }]);
-        setSearchQuery('');
-    };
-    
-    const handleQuantityChange = (itemId: string, newQuantity: number) => {
-        const itemInList = itemsToAdd.find(i => i.itemId === itemId);
-        if (itemInList && !itemInList.isService && newQuantity > itemInList.stock) {
-            toast({
-                variant: 'destructive',
-                title: 'Stock Insuficiente',
-                description: `Solo hay ${itemInList.stock} unidades de ${itemInList.name} disponibles.`
-            });
-            return;
-        }
-        
-        setItemsToAdd(prev => prev.map(item =>
-            item.itemId === itemId ? { ...item, quantity: Math.max(1, newQuantity) } : item
-        ));
-    };
-    
-    const handleRemoveItem = (itemId: string) => {
-        setItemsToAdd(prev => prev.filter(item => item.itemId !== itemId));
-    };
 
-    const handleAddItemsToOrder = async () => {
-        if (itemsToAdd.length === 0) return;
-        
-        await addMultiplePartsToOrder(orderId, itemsToAdd.map(i => ({ itemId: i.itemId, quantity: i.quantity })));
-        
-        handleOpenChange(false);
+        try {
+            await addMultiplePartsToOrder(orderId, [{ itemId: item.id, quantity: 1 }]);
+            handleOpenChange(false);
+        } catch (error) {
+            // Error toast is handled in the context
+            console.error("Error adding part to order:", error);
+        } finally {
+            setIsAdding(false);
+        }
     };
 
     const handleOpenChange = (open: boolean) => {
         if (!open) {
-            setItemsToAdd([]);
             setSearchQuery("");
         }
         setIsOpen(open);
@@ -173,74 +138,46 @@ function AddPartDialog({ orderId }: { orderId: string }) {
             <DialogTrigger asChild>
                 <Button size="sm" variant="outline"><PlusCircle className="mr-2 h-4 w-4"/>Añadir Parte</Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-3xl">
+            <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Añadir Partes a la Orden</DialogTitle>
-                    <DialogDescription>Busca y selecciona productos para añadir a la orden. El sistema aplicará FIFO para asignar costos.</DialogDescription>
+                    <DialogTitle>Añadir Parte a la Orden</DialogTitle>
+                    <DialogDescription>Busca un producto por nombre o SKU para añadirlo a la orden.</DialogDescription>
                 </DialogHeader>
-                <div className="grid grid-cols-2 gap-6">
-                    <div className="flex flex-col gap-4">
-                        <Input
-                            placeholder="Buscar Producto por nombre o SKU..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                        <ScrollArea className="h-64 border rounded-md">
-                            <div className="p-2">
-                                {filteredInventory.length > 0 ? (
-                                    filteredInventory.map(item => (
-                                        <div
-                                            key={item.id}
-                                            className="flex justify-between items-center p-2 rounded-md cursor-pointer hover:bg-muted"
-                                            onClick={() => handleSelectProduct(item)}
-                                        >
-                                            <div>
-                                                <div className="font-medium">{item.name}</div>
-                                                <div className="text-xs text-muted-foreground">
-                                                    {item.isService ? 'Servicio' : `Stock: ${item.stock}`}
-                                                </div>
+                <div className="flex flex-col gap-4">
+                    <Input
+                        placeholder="Buscar Producto..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        disabled={isAdding}
+                    />
+                    <ScrollArea className="h-64 border rounded-md">
+                        <div className="p-2">
+                            {filteredInventory.length > 0 ? (
+                                filteredInventory.map(item => (
+                                    <div
+                                        key={item.id}
+                                        className="flex justify-between items-center p-2 rounded-md cursor-pointer hover:bg-muted"
+                                        onClick={() => !isAdding && handleSelectProduct(item)}
+                                    >
+                                        <div>
+                                            <div className="font-medium">{item.name}</div>
+                                            <div className="text-xs text-muted-foreground">
+                                                {item.isService ? 'Servicio' : `Stock: ${item.stock}`}
                                             </div>
-                                            <div className="font-medium">${item.sellingPrice.toFixed(2)}</div>
                                         </div>
-                                    ))
-                                ) : (
-                                    <div className="text-sm text-center text-muted-foreground p-4">No se encontraron productos.</div>
-                                )}
-                            </div>
-                        </ScrollArea>
-                    </div>
-                    <div className="flex flex-col gap-4">
-                        <h4 className="font-semibold text-center">Productos a Añadir</h4>
-                        <ScrollArea className="h-64 border rounded-md bg-muted/50">
-                            {itemsToAdd.length === 0 ? (
-                                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">Selecciona productos de la izquierda.</div>
+                                        <div className="font-medium">${item.sellingPrice.toFixed(2)}</div>
+                                    </div>
+                                ))
                             ) : (
-                                <Table>
-                                    <TableHeader><TableRow><TableHead>Producto</TableHead><TableHead className="w-[80px]">Cant.</TableHead><TableHead className="w-[40px]"></TableHead></TableRow></TableHeader>
-                                    <TableBody>
-                                        {itemsToAdd.map(item => (
-                                            <TableRow key={item.itemId}>
-                                                <TableCell className="py-2">
-                                                    <div className="font-medium">{item.name}</div>
-                                                    <div className="text-xs text-muted-foreground">${item.sellingPrice.toFixed(2)} c/u</div>
-                                                </TableCell>
-                                                <TableCell className="py-2">
-                                                    <Input type="number" value={item.quantity} onChange={(e) => handleQuantityChange(item.itemId, parseInt(e.target.value, 10))} min="1" max={item.isService ? undefined : item.stock} className="h-8 w-16" />
-                                                </TableCell>
-                                                <TableCell className="py-2">
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleRemoveItem(item.itemId)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                                <div className="text-sm text-center text-muted-foreground p-4">
+                                    {searchQuery ? "No se encontraron productos." : "Comienza a escribir para buscar..."}
+                                </div>
                             )}
-                        </ScrollArea>
-                    </div>
+                        </div>
+                    </ScrollArea>
                 </div>
                 <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
-                    <Button type="button" onClick={handleAddItemsToOrder} disabled={itemsToAdd.length === 0}><PlusCircle className="mr-2 h-4 w-4"/>Añadir {itemsToAdd.length > 0 ? `${itemsToAdd.length} Producto(s)` : ''}</Button>
+                    <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isAdding}>Cancelar</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
