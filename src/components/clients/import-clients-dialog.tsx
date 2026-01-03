@@ -75,7 +75,11 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
     const rows = fileData.slice(1).filter((row: any[]) => row.some(cell => cell && cell.trim() !== ''));
     
     setCsvData({ headers, rows });
-    setFileName(results.file?.name || 'Archivo cargado');
+    if (results.file) {
+      setFileName(results.file.name);
+    } else {
+        setFileName('Archivo cargado');
+    }
     setStep(2);
     toast({ title: "Archivo Cargado", description: "Por favor, mapea las columnas del archivo." });
   };
@@ -95,7 +99,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
   const importedClientsPreview = React.useMemo(() => {
     if (csvData.rows.length === 0) return [];
     
-    const nameIndex = csvData.headers.indexOf(mappedFields.name!);
+    const nameIndex = mappedFields.name ? csvData.headers.indexOf(mappedFields.name) : -1;
     const emailIndex = mappedFields.email ? csvData.headers.indexOf(mappedFields.email) : -1;
     const phoneIndex = mappedFields.phone ? csvData.headers.indexOf(mappedFields.phone) : -1;
     const addressIndex = mappedFields.address ? csvData.headers.indexOf(mappedFields.address) : -1;
@@ -106,9 +110,16 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
     const createdAtIndex = mappedFields.createdAt ? csvData.headers.indexOf(mappedFields.createdAt) : -1;
 
     return csvData.rows.map(row => {
-      const createdAtDate = createdAtIndex > -1 ? new Date(row[createdAtIndex]) : new Date();
+      let createdAtDate = new Date();
+      if(createdAtIndex > -1 && row[createdAtIndex]) {
+          const parsedDate = new Date(row[createdAtIndex]);
+          if(!isNaN(parsedDate.getTime())) {
+              createdAtDate = parsedDate;
+          }
+      }
+
       return {
-        name: row[nameIndex] || '',
+        name: nameIndex > -1 ? row[nameIndex] : '',
         email: emailIndex > -1 ? row[emailIndex] : '',
         phone: phoneIndex > -1 ? row[phoneIndex] : '',
         address: addressIndex > -1 ? row[addressIndex] : '',
@@ -116,7 +127,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
         cfdiUse: cfdiUseIndex > -1 ? row[cfdiUseIndex] : '',
         source: sourceIndex > -1 ? row[sourceIndex] : '',
         notes: notesIndex > -1 ? row[notesIndex] : '',
-        createdAt: isNaN(createdAtDate.getTime()) ? new Date().toISOString() : createdAtDate.toISOString(),
+        createdAt: createdAtDate.toISOString(),
       }
     });
 
@@ -210,7 +221,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
         
         {step === 2 && (
             <div className='space-y-4'>
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                     {clientFields.map(field => {
                       return (
                         <div key={field} className="space-y-2">
