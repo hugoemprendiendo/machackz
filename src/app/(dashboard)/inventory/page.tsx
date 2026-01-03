@@ -64,7 +64,7 @@ export default function InventoryStockPage() {
                 <TableHead>SKU</TableHead>
                 <TableHead>Categoría</TableHead>
                 <TableHead className="text-right">Stock Actual</TableHead>
-                <TableHead className="text-right">Valor de Costo</TableHead>
+                <TableHead className="text-right">Valor de Inventario (Costo)</TableHead>
                 <TableHead>Estado</TableHead>
               </TableRow>
             </TableHeader>
