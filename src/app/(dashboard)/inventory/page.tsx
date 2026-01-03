@@ -15,11 +15,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useDataContext } from "@/context/data-context";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Wrench } from "lucide-react";
@@ -30,6 +30,11 @@ export default function InventoryStockPage() {
   const physicalInventory = React.useMemo(() => 
     inventory.filter(item => !item.isService && item.stock > 0), 
     [inventory]
+  );
+
+  const totalInventoryValue = React.useMemo(() =>
+    physicalInventory.reduce((total, item) => total + (item.costPrice * item.stock), 0),
+    [physicalInventory]
   );
 
   return (
@@ -89,6 +94,13 @@ export default function InventoryStockPage() {
                 );
               })}
             </TableBody>
+            <TableFooter>
+                <TableRow className="bg-muted/50 font-bold">
+                    <TableCell colSpan={4} className="text-right">Valor Total del Inventario</TableCell>
+                    <TableCell className="text-right">${totalInventoryValue.toFixed(2)}</TableCell>
+                    <TableCell></TableCell>
+                </TableRow>
+            </TableFooter>
           </Table>
         </CardContent>
       </Card>

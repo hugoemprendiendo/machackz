@@ -15,6 +15,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableFooter,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useDataContext } from "@/context/data-context";
@@ -23,7 +24,6 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { OrderPart } from "@/lib/types";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface AggregatedPart {
@@ -31,6 +31,7 @@ interface AggregatedPart {
   name: string;
   sku: string;
   totalQuantity: number;
+  totalCostValue: number;
   orders: { id: string; customerName: string; quantity: number }[];
 }
 
@@ -38,7 +39,7 @@ export default function InventoryInOrdersPage() {
   const { orders, inventory } = useDataContext();
   const router = useRouter();
 
-  const committedStock = React.useMemo(() => {
+  const {committedStock, totalCommittedValue} = React.useMemo(() => {
     const openOrders = orders.filter(o => 
         o.status === 'Abierta' || 
         o.status === 'En Progreso' || 
@@ -46,6 +47,7 @@ export default function InventoryInOrdersPage() {
     );
     
     const partsMap = new Map<string, AggregatedPart>();
+    let totalValue = 0;
 
     openOrders.forEach(order => {
       order.parts.forEach(part => {
@@ -57,21 +59,27 @@ export default function InventoryInOrdersPage() {
               name: product.name,
               sku: product.sku,
               totalQuantity: 0,
+              totalCostValue: 0,
               orders: [],
             });
           }
           const aggregated = partsMap.get(part.itemId)!;
           aggregated.totalQuantity += part.quantity;
+          aggregated.totalCostValue += part.unitCost * part.quantity;
           aggregated.orders.push({
             id: order.id,
             customerName: order.customerName,
             quantity: part.quantity,
           });
+          totalValue += part.unitCost * part.quantity;
         }
       });
     });
 
-    return Array.from(partsMap.values());
+    return {
+      committedStock: Array.from(partsMap.values()),
+      totalCommittedValue: totalValue,
+    };
   }, [orders, inventory]);
 
   return (
@@ -100,13 +108,14 @@ export default function InventoryInOrdersPage() {
                 <TableHead>Producto</TableHead>
                 <TableHead>SKU</TableHead>
                 <TableHead className="text-right">Cant. Total Reservada</TableHead>
+                <TableHead className="text-right">Valor de Costo</TableHead>
                 <TableHead className="text-center">En Órdenes</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
                 {committedStock.length === 0 && (
                     <TableRow>
-                        <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
+                        <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
                             No hay inventario comprometido en órdenes abiertas actualmente.
                         </TableCell>
                     </TableRow>
@@ -120,6 +129,7 @@ export default function InventoryInOrdersPage() {
                     </TableCell>
                     <TableCell>{item.sku}</TableCell>
                     <TableCell className="text-right font-bold">{item.totalQuantity}</TableCell>
+                    <TableCell className="text-right font-medium">${item.totalCostValue.toFixed(2)}</TableCell>
                     <TableCell className="text-center">
                         <Popover>
                             <PopoverTrigger asChild>
@@ -155,6 +165,13 @@ export default function InventoryInOrdersPage() {
                   </TableRow>
               ))}
             </TableBody>
+            <TableFooter>
+                <TableRow className="bg-muted/50 font-bold">
+                    <TableCell colSpan={3} className="text-right">Valor Total Comprometido</TableCell>
+                    <TableCell className="text-right">${totalCommittedValue.toFixed(2)}</TableCell>
+                    <TableCell></TableCell>
+                </TableRow>
+            </TableFooter>
           </Table>
         </CardContent>
       </Card>
