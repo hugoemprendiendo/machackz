@@ -1,4 +1,5 @@
 
+
 {
   "entities": {
     "Expense": {
@@ -150,6 +151,10 @@
         "notes": {
           "type": "string",
           "description": "Additional notes about the client."
+        },
+        "source": {
+          "type": "string",
+          "description": "How the client found out about the shop (e.g., 'Recomendación', 'Facebook')."
         }
       },
       "required": [

@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useForm, Controller } from "react-hook-form";
@@ -30,6 +31,7 @@ const clientFormSchema = z.object({
   countryCode: z.string(),
   phone: z.string().min(8, "El teléfono debe tener al menos 8 dígitos."),
   address: z.string().optional(),
+  source: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -43,6 +45,7 @@ interface NewClientDialogProps {
 }
 
 const countryCodes = ['+52', '+1', '+34', '+54', '+57', '+56'];
+const clientSources = ['Recomendación', 'Facebook', 'Instagram', 'Google', 'Anuncio Local', 'Otro'];
 
 export function NewClientDialog({ children, open, onOpenChange, onClientCreated }: NewClientDialogProps) {
   const { toast } = useToast();
@@ -56,6 +59,7 @@ export function NewClientDialog({ children, open, onOpenChange, onClientCreated 
       countryCode: "+52",
       phone: "",
       address: "",
+      source: "",
       notes: "",
     },
   });
@@ -67,6 +71,7 @@ export function NewClientDialog({ children, open, onOpenChange, onClientCreated 
       phone: `${data.countryCode} ${data.phone}`,
       email: data.email || '',
       address: data.address || '',
+      source: data.source || '',
       notes: data.notes || '',
     };
 
@@ -127,6 +132,25 @@ export function NewClientDialog({ children, open, onOpenChange, onClientCreated 
             <Input id="email" type="email" {...form.register("email")} placeholder="Ej. juan.perez@example.com" />
             {form.formState.errors.email && <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>}
           </div>
+           <div className="space-y-2">
+                <Label htmlFor="source">Fuente del Cliente</Label>
+                    <Controller
+                    control={form.control}
+                    name="source"
+                    render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar fuente..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                            {clientSources.map(source => (
+                                <SelectItem key={source} value={source}>{source}</SelectItem>
+                            ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+                />
+            </div>
           <div className="space-y-2">
             <Label htmlFor="address">Dirección (Opcional)</Label>
             <Input id="address" {...form.register("address")} placeholder="Ej. Calle Falsa 123, Springfield" />

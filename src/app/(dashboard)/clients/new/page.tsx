@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -28,12 +29,14 @@ const clientFormSchema = z.object({
   countryCode: z.string(),
   phone: z.string().min(8, "El teléfono debe tener al menos 8 dígitos."),
   address: z.string().optional(),
+  source: z.string().optional(),
   notes: z.string().optional(),
 });
 
 type ClientFormValues = z.infer<typeof clientFormSchema>;
 
 const countryCodes = ['+52', '+1', '+34', '+54', '+57', '+56'];
+const clientSources = ['Recomendación', 'Facebook', 'Instagram', 'Google', 'Anuncio Local', 'Otro'];
 
 export default function NewClientPage() {
   const router = useRouter();
@@ -48,6 +51,7 @@ export default function NewClientPage() {
       countryCode: "+52",
       phone: "",
       address: "",
+      source: "",
       notes: "",
     },
   });
@@ -58,6 +62,7 @@ export default function NewClientPage() {
       phone: `${data.countryCode} ${data.phone}`,
       email: data.email || '',
       address: data.address || '',
+      source: data.source || '',
       notes: data.notes || '',
     });
     toast({
@@ -119,10 +124,31 @@ export default function NewClientPage() {
                 </div>
                 {form.formState.errors.phone && <p className="text-sm text-destructive">{form.formState.errors.phone.message}</p>}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email (Opcional)</Label>
-              <Input id="email" type="email" {...form.register("email")} placeholder="Ej. juan.perez@example.com" />
-              {form.formState.errors.email && <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                <Label htmlFor="email">Email (Opcional)</Label>
+                <Input id="email" type="email" {...form.register("email")} placeholder="Ej. juan.perez@example.com" />
+                {form.formState.errors.email && <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>}
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="source">Fuente del Cliente</Label>
+                     <Controller
+                        control={form.control}
+                        name="source"
+                        render={({ field }) => (
+                            <Select onValueChange={field.onChange} value={field.value}>
+                                <SelectTrigger>
+                                <SelectValue placeholder="Seleccionar fuente..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                {clientSources.map(source => (
+                                    <SelectItem key={source} value={source}>{source}</SelectItem>
+                                ))}
+                                </SelectContent>
+                            </Select>
+                        )}
+                    />
+                </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="address">Dirección (Opcional)</Label>

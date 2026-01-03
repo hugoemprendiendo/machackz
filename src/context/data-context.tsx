@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo } from 'react';
@@ -94,7 +95,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addClient = async (client: Omit<Client, 'id'>) => {
     if (!clientsRef) return;
-    return addDocumentNonBlocking(clientsRef, client);
+    return addDocumentNonBlocking(clientsRef, { ...client, source: client.source || '' });
   };
   const updateClient = async (updatedClient: Client) => {
     const { id, ...data } = updatedClient;

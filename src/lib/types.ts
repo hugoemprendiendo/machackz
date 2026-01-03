@@ -21,6 +21,7 @@ export type Client = {
   phone: string;
   address: string;
   notes?: string;
+  source?: string;
 };
 
 export type Supplier = {

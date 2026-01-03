@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { PlusCircle, MoreHorizontal, Trash2, Upload } from "lucide-react";
@@ -42,6 +43,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { ClientImportDialog } from "@/components/clients/import-clients-dialog";
+import { Badge } from "@/components/ui/badge";
 
 function DeleteClientDialog({ clientId, clientName, onConfirm }: { clientId: string, clientName: string, onConfirm: () => void }) {
   return (
@@ -116,6 +118,7 @@ export default function ClientsPage() {
                   <TableHead>Nombre</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Teléfono</TableHead>
+                  <TableHead>Fuente</TableHead>
                   <TableHead className="hidden md:table-cell">Dirección</TableHead>
                   <TableHead>
                     <span className="sr-only">Acciones</span>
@@ -128,6 +131,9 @@ export default function ClientsPage() {
                     <TableCell className="font-medium">{client.name}</TableCell>
                     <TableCell>{client.email}</TableCell>
                     <TableCell>{client.phone}</TableCell>
+                    <TableCell>
+                      {client.source && <Badge variant="secondary">{client.source}</Badge>}
+                    </TableCell>
                     <TableCell className="hidden md:table-cell">{client.address}</TableCell>
                     <TableCell>
                       <DropdownMenu>
