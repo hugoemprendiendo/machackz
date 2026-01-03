@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDataContext } from "@/context/data-context";
 import { Client } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { cfdiUses } from "@/lib/data";
 
 const clientFormSchema = z.object({
   name: z.string().min(2, "El nombre es requerido."),
@@ -31,6 +32,8 @@ const clientFormSchema = z.object({
   countryCode: z.string(),
   phone: z.string().min(8, "El teléfono debe tener al menos 8 dígitos."),
   address: z.string().optional(),
+  taxId: z.string().optional(),
+  cfdiUse: z.string().optional(),
   source: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -59,6 +62,8 @@ export function NewClientDialog({ children, open, onOpenChange, onClientCreated 
       countryCode: "+52",
       phone: "",
       address: "",
+      taxId: "",
+      cfdiUse: "",
       source: "",
       notes: "",
     },
@@ -71,21 +76,20 @@ export function NewClientDialog({ children, open, onOpenChange, onClientCreated 
       phone: `${data.countryCode} ${data.phone}`,
       email: data.email || '',
       address: data.address || '',
+      taxId: data.taxId || '',
+      cfdiUse: data.cfdiUse || '',
       source: data.source || '',
       notes: data.notes || '',
     };
 
-    await addClient(newClientData);
-
-    // This is a bit of a hack, we should get the new client from the addClient response
-    const tempClient: Client = { ...newClientData, id: 'temp-id' };
+    const newClient = await addClient(newClientData);
 
     toast({
       title: "Cliente Creado",
       description: `El cliente ${data.name} ha sido creado exitosamente.`,
     });
     form.reset();
-    onClientCreated(tempClient);
+    onClientCreated({ ...newClientData, id: newClient.id });
   };
 
   return (
@@ -155,6 +159,33 @@ export function NewClientDialog({ children, open, onOpenChange, onClientCreated 
             <Label htmlFor="address">Dirección (Opcional)</Label>
             <Input id="address" {...form.register("address")} placeholder="Ej. Calle Falsa 123, Springfield" />
             {form.formState.errors.address && <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="taxId">RFC (Opcional)</Label>
+              <Input id="taxId" {...form.register("taxId")} placeholder="Ej. PEEJ800101HMA" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cfdiUse">Uso de CFDI</Label>
+              <Controller
+                control={form.control}
+                name="cfdiUse"
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cfdiUses.map((use) => (
+                        <SelectItem key={use.code} value={use.code}>
+                          {use.code}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="notes">Notas Adicionales</Label>

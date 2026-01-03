@@ -20,6 +20,8 @@ export type Client = {
   email: string;
   phone: string;
   address: string;
+  taxId?: string;
+  cfdiUse?: string;
   notes?: string;
   source?: string;
 };

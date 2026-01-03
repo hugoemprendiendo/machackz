@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -22,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useDataContext } from "@/context/data-context";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cfdiUses } from "@/lib/data";
 
 const clientFormSchema = z.object({
   name: z.string().min(2, "El nombre es requerido."),
@@ -29,6 +29,8 @@ const clientFormSchema = z.object({
   countryCode: z.string(),
   phone: z.string().min(8, "El teléfono debe tener al menos 8 dígitos."),
   address: z.string().optional(),
+  taxId: z.string().optional(),
+  cfdiUse: z.string().optional(),
   source: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -51,6 +53,8 @@ export default function NewClientPage() {
       countryCode: "+52",
       phone: "",
       address: "",
+      taxId: "",
+      cfdiUse: "",
       source: "",
       notes: "",
     },
@@ -62,6 +66,8 @@ export default function NewClientPage() {
       phone: `${data.countryCode} ${data.phone}`,
       email: data.email || '',
       address: data.address || '',
+      taxId: data.taxId || '',
+      cfdiUse: data.cfdiUse || '',
       source: data.source || '',
       notes: data.notes || '',
     });
@@ -154,6 +160,32 @@ export default function NewClientPage() {
               <Label htmlFor="address">Dirección (Opcional)</Label>
               <Input id="address" {...form.register("address")} placeholder="Ej. Calle Falsa 123, Springfield" />
               {form.formState.errors.address && <p className="text-sm text-destructive">{form.formState.errors.address.message}</p>}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="taxId">RFC (Opcional)</Label>
+                <Input id="taxId" {...form.register("taxId")} placeholder="Ej. PEEJ800101HMA" />
+                {form.formState.errors.taxId && <p className="text-sm text-destructive">{form.formState.errors.taxId.message}</p>}
+              </div>
+              <div className="space-y-2">
+                  <Label htmlFor="cfdiUse">Uso de CFDI (Opcional)</Label>
+                    <Controller
+                      control={form.control}
+                      name="cfdiUse"
+                      render={({ field }) => (
+                          <Select onValueChange={field.onChange} value={field.value}>
+                              <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar uso de CFDI..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                              {cfdiUses.map(use => (
+                                  <SelectItem key={use.code} value={use.code}>{use.code} - {use.description}</SelectItem>
+                              ))}
+                              </SelectContent>
+                          </Select>
+                      )}
+                  />
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="notes">Notas Adicionales</Label>

@@ -95,7 +95,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addClient = async (client: Omit<Client, 'id'>) => {
     if (!clientsRef) return;
-    return addDocumentNonBlocking(clientsRef, { ...client, source: client.source || '' });
+    return addDocumentNonBlocking(clientsRef, { 
+      ...client, 
+      source: client.source || '',
+      taxId: client.taxId || '',
+      cfdiUse: client.cfdiUse || '',
+    });
   };
   const updateClient = async (updatedClient: Client) => {
     const { id, ...data } = updatedClient;

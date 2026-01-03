@@ -116,10 +116,10 @@ export default function ClientsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre</TableHead>
+                  <TableHead>RFC</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Teléfono</TableHead>
                   <TableHead>Fuente</TableHead>
-                  <TableHead className="hidden md:table-cell">Dirección</TableHead>
                   <TableHead>
                     <span className="sr-only">Acciones</span>
                   </TableHead>
@@ -129,12 +129,12 @@ export default function ClientsPage() {
                 {clients.map((client) => (
                   <TableRow key={client.id}>
                     <TableCell className="font-medium">{client.name}</TableCell>
+                    <TableCell>{client.taxId}</TableCell>
                     <TableCell>{client.email}</TableCell>
                     <TableCell>{client.phone}</TableCell>
                     <TableCell>
                       {client.source && <Badge variant="secondary">{client.source}</Badge>}
                     </TableCell>
-                    <TableCell className="hidden md:table-cell">{client.address}</TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

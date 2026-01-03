@@ -148,6 +148,14 @@
           "type": "string",
           "description": "Physical address of the client."
         },
+        "taxId": {
+            "type": "string",
+            "description": "Tax identification number (e.g., RFC in Mexico)."
+        },
+        "cfdiUse": {
+            "type": "string",
+            "description": "The CFDI use code (e.g., G01, G03)."
+        },
         "notes": {
           "type": "string",
           "description": "Additional notes about the client."
