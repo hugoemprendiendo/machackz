@@ -381,10 +381,12 @@ export function AiImportStepper() {
                             <Sparkles className="h-4 w-4" />
                             <AlertTitle>Vista Previa de los Datos Extraídos</AlertTitle>
                             <AlertDescription>
-                                <Table>
-                                    <TableHeader><TableRow>{aiData.headers.map(h => <TableHead key={h}>{h}</TableHead>)}</TableRow></TableHeader>
-                                    <TableBody>{aiData.rows.slice(0,3).map((row, rIndex) => <TableRow key={rIndex}>{row.map((cell, cIndex) => <TableCell key={cIndex}>{cell}</TableCell>)}</TableRow>)}</TableBody>
-                                </Table>
+                                <div className="w-full overflow-x-auto rounded-lg border">
+                                    <Table>
+                                        <TableHeader><TableRow>{aiData.headers.map((h, i) => <TableHead key={`${h}-${i}`}>{h}</TableHead>)}</TableRow></TableHeader>
+                                        <TableBody>{aiData.rows.slice(0,3).map((row, rIndex) => <TableRow key={rIndex}>{row.map((cell, cIndex) => <TableCell key={cIndex} className="whitespace-nowrap">{cell}</TableCell>)}</TableRow>)}</TableBody>
+                                    </Table>
+                                </div>
                             </AlertDescription>
                         </Alert>
                     </CardContent>
@@ -402,9 +404,19 @@ export function AiImportStepper() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Paso 3: Revisa y Vincula los Productos</CardTitle>
-                        <CardDescription>La IA ha extraído estos productos. Vincula los productos nuevos a tu inventario existente o créalos.</CardDescription>
+                        <CardDescription>La IA ha extraído estos productos. Verifica la fecha y vincula los productos a tu inventario existente o créalos.</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-6">
+                        <div className="grid md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <Label htmlFor="invoiceNumber">Número de Factura</Label>
+                                <Input id="invoiceNumber" {...form.register("invoiceNumber")} placeholder="Ej. FAC-2024-123" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="date">Fecha de Compra</Label>
+                                <Input id="date" type="date" {...form.register("date")} />
+                            </div>
+                        </div>
                          <Table>
                             <TableHeader>
                                 <TableRow>
@@ -534,5 +546,3 @@ export function AiImportStepper() {
         </>
     );
 }
-
-    
