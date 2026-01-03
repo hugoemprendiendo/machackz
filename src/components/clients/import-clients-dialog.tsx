@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { useCSVReader } from 'react-papaparse';
-import { Upload, File, CheckCircle, AlertTriangle, X, ArrowLeft, ArrowRight, Sparkles } from 'lucide-react';
+import { Upload, File, CheckCircle, AlertTriangle, X, ArrowLeft, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -28,7 +28,7 @@ interface ClientImportDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const clientFields = ['name', 'email', 'phone', 'address', 'taxId', 'cfdiUse', 'source', 'notes'] as const;
+const clientFields = ['name', 'email', 'phone', 'address', 'taxId', 'cfdiUse', 'source', 'notes', 'createdAt'] as const;
 type ClientField = typeof clientFields[number];
 
 type MappedFields = Partial<Record<ClientField, string>>;
@@ -103,18 +103,22 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
     const cfdiUseIndex = mappedFields.cfdiUse ? csvData.headers.indexOf(mappedFields.cfdiUse) : -1;
     const sourceIndex = mappedFields.source ? csvData.headers.indexOf(mappedFields.source) : -1;
     const notesIndex = mappedFields.notes ? csvData.headers.indexOf(mappedFields.notes) : -1;
+    const createdAtIndex = mappedFields.createdAt ? csvData.headers.indexOf(mappedFields.createdAt) : -1;
 
-    return csvData.rows.map(row => ({
-      name: row[nameIndex] || '',
-      email: emailIndex > -1 ? row[emailIndex] : '',
-      phone: phoneIndex > -1 ? row[phoneIndex] : '',
-      address: addressIndex > -1 ? row[addressIndex] : '',
-      taxId: taxIdIndex > -1 ? row[taxIdIndex] : '',
-      cfdiUse: cfdiUseIndex > -1 ? row[cfdiUseIndex] : '',
-      source: sourceIndex > -1 ? row[sourceIndex] : '',
-      notes: notesIndex > -1 ? row[notesIndex] : '',
-      createdAt: new Date().toISOString(),
-    }));
+    return csvData.rows.map(row => {
+      const createdAtDate = createdAtIndex > -1 ? new Date(row[createdAtIndex]) : new Date();
+      return {
+        name: row[nameIndex] || '',
+        email: emailIndex > -1 ? row[emailIndex] : '',
+        phone: phoneIndex > -1 ? row[phoneIndex] : '',
+        address: addressIndex > -1 ? row[addressIndex] : '',
+        taxId: taxIdIndex > -1 ? row[taxIdIndex] : '',
+        cfdiUse: cfdiUseIndex > -1 ? row[cfdiUseIndex] : '',
+        source: sourceIndex > -1 ? row[sourceIndex] : '',
+        notes: notesIndex > -1 ? row[notesIndex] : '',
+        createdAt: isNaN(createdAtDate.getTime()) ? new Date().toISOString() : createdAtDate.toISOString(),
+      }
+    });
 
   }, [csvData, mappedFields]);
 
@@ -145,7 +149,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
   }
   
   const createCSVTemplate = () => {
-    const csvContent = "data:text/csv;charset=utf-8," + clientFields.filter(f => f !== 'notes').join(',') + '\n';
+    const csvContent = "data:text/csv;charset=utf-8," + clientFields.join(',') + '\n';
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -243,6 +247,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
                             <TableHead>Teléfono</TableHead>
                             <TableHead>RFC</TableHead>
                             <TableHead>Fuente</TableHead>
+                            <TableHead>Creado</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -253,6 +258,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
                                 <TableCell>{client.phone}</TableCell>
                                 <TableCell>{client.taxId}</TableCell>
                                 <TableCell>{client.source}</TableCell>
+                                <TableCell>{new Date(client.createdAt).toLocaleDateString()}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
