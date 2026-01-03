@@ -28,7 +28,7 @@ export default function InventoryStockPage() {
   const { inventory } = useDataContext();
   
   const physicalInventory = React.useMemo(() => 
-    inventory.filter(item => !item.isService && item.stock > 0), 
+    inventory.filter(item => !item.isService), 
     [inventory]
   );
 
@@ -69,30 +69,40 @@ export default function InventoryStockPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {physicalInventory.map((item) => {
-                const isLowStock = item.stock <= item.minStock;
-                const inventoryValue = item.costPrice * item.stock;
-                return (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">
-                      <Link href={`/inventory/${item.id}`} className="text-primary hover:underline">
-                        {item.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{item.sku}</TableCell>
-                    <TableCell>{item.category}</TableCell>
-                    <TableCell className="text-right">{item.stock}</TableCell>
-                    <TableCell className="text-right font-medium">${inventoryValue.toFixed(2)}</TableCell>
-                    <TableCell>
-                      {isLowStock ? (
-                        <Badge variant="destructive">Stock Bajo</Badge>
-                      ) : (
-                        <Badge variant="secondary">En Stock</Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {physicalInventory.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-24 text-center">
+                    No hay productos en el inventario.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                physicalInventory.map((item) => {
+                  const isLowStock = item.stock > 0 && item.stock <= item.minStock;
+                  const inventoryValue = item.costPrice * item.stock;
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">
+                        <Link href={`/inventory/${item.id}`} className="text-primary hover:underline">
+                          {item.name}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{item.sku}</TableCell>
+                      <TableCell>{item.category}</TableCell>
+                      <TableCell className="text-right">{item.stock}</TableCell>
+                      <TableCell className="text-right font-medium">${inventoryValue.toFixed(2)}</TableCell>
+                      <TableCell>
+                        {item.stock === 0 ? (
+                          <Badge variant="outline">Sin Stock</Badge>
+                        ) : isLowStock ? (
+                          <Badge variant="destructive">Stock Bajo</Badge>
+                        ) : (
+                          <Badge variant="secondary">En Stock</Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
             <TableFooter>
                 <TableRow className="bg-muted/50 font-bold">
