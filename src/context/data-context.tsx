@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo } from 'react';
@@ -47,6 +46,7 @@ interface DataContextProps {
   updateSettings: (settings: AppSettings) => Promise<void>;
   seedDatabase: () => Promise<void>;
   migrateInventoryToLots: () => Promise<void>;
+  updateInventoryStock: (itemId: string, newStock: number) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextProps | undefined>(undefined);
@@ -135,6 +135,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { id, ...data } = updatedItem;
     updateDocumentNonBlocking(doc(firestore, "inventory", id), data);
   };
+  const updateInventoryStock = async (itemId: string, newStock: number) => {
+      updateDocumentNonBlocking(doc(firestore, 'inventory', itemId), { stock: newStock });
+  };
   const deleteInventoryItem = async (itemId: string) => {
     deleteDocumentNonBlocking(doc(firestore, "inventory", itemId));
   };
@@ -163,30 +166,36 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addStockEntry = async (entry: Omit<StockEntry, 'id'>) => {
     if (!firestore) return;
-    const stockEntryRef = doc(collection(firestore, 'stockEntries'));
-    const batch = writeBatch(firestore);
     
-    batch.set(stockEntryRef, {...entry, id: stockEntryRef.id});
-
-    for (const item of entry.items) {
-        const productRef = doc(firestore, 'inventory', item.itemId);
-        const lotRef = doc(collection(firestore, `inventory/${item.itemId}/stockLots`));
-        const newLot: Omit<StockLot, 'id'> = {
-            purchaseId: stockEntryRef.id,
-            purchaseDate: entry.date,
-            createdAt: serverTimestamp(),
-            quantity: item.quantity,
-            costPrice: item.unitCost,
-        };
-        batch.set(lotRef, newLot);
-        
-        const currentProduct = inventory.find(p => p.id === item.itemId);
-        if (currentProduct) {
-            batch.update(productRef, { stock: currentProduct.stock + item.quantity });
-        }
+    const chunks: StockEntryItem[][] = [];
+    for (let i = 0; i < entry.items.length; i += 498) {
+        chunks.push(entry.items.slice(i, i + 498));
     }
-    
-    return batch.commit();
+
+    for (const chunk of chunks) {
+        const batch = writeBatch(firestore);
+        const stockEntryRef = doc(collection(firestore, 'stockEntries'));
+        batch.set(stockEntryRef, {...entry, id: stockEntryRef.id, items: chunk});
+
+        for (const item of chunk) {
+            const productRef = doc(firestore, 'inventory', item.itemId);
+            const lotRef = doc(collection(firestore, `inventory/${item.itemId}/stockLots`));
+            const newLot: Omit<StockLot, 'id'> = {
+                purchaseId: stockEntryRef.id,
+                purchaseDate: entry.date,
+                createdAt: serverTimestamp(),
+                quantity: item.quantity,
+                costPrice: item.unitCost,
+            };
+            batch.set(lotRef, newLot);
+            
+            const currentProduct = inventory.find(p => p.id === item.itemId);
+            if (currentProduct) {
+                batch.update(productRef, { stock: currentProduct.stock + item.quantity });
+            }
+        }
+        await batch.commit();
+    }
   };
 
   const updateStockEntry = async (updatedEntry: StockEntry) => {
@@ -245,7 +254,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             await runTransaction(firestore, async (transaction) => {
                 const productRef = doc(firestore, 'inventory', item.itemId);
                 const lotsQuery = query(collection(firestore, `inventory/${item.itemId}/stockLots`), where('quantity', '>', 0), orderBy('createdAt', 'asc'));
-                const lotsSnapshot = await getDocs(lotsQuery);
+                
+                // Fetch must be inside the transaction
+                const lotsSnapshot = await transaction.get(lotsQuery);
 
                 let quantityNeeded = item.quantity;
                 const newParts: OrderPart[] = [];
@@ -368,63 +379,115 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     for (const collectionName of collectionsToClear) {
         const collectionRef = collection(firestore, collectionName);
         const snapshot = await getDocs(query(collectionRef));
-        const batch = writeBatch(firestore);
-        snapshot.docs.forEach(doc => batch.delete(doc.ref));
-        await batch.commit();
         
-        // Also clear subcollections for inventory
+        if (snapshot.empty) continue;
+        
+        const chunks: any[][] = [];
+        for (let i = 0; i < snapshot.docs.length; i += 500) {
+            chunks.push(snapshot.docs.slice(i, i + 500));
+        }
+
+        for (const chunk of chunks) {
+            const batch = writeBatch(firestore);
+            chunk.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+        }
+        
         if (collectionName === 'inventory') {
-            const inventorySnapshot = await getDocs(query(collection(firestore, 'inventory')));
-            for (const invDoc of inventorySnapshot.docs) {
+            for (const invDoc of snapshot.docs) {
                 const lotsRef = collection(firestore, `inventory/${invDoc.id}/stockLots`);
                 const lotsSnapshot = await getDocs(query(lotsRef));
-                const subBatch = writeBatch(firestore);
-                lotsSnapshot.docs.forEach(lotDoc => subBatch.delete(lotDoc.ref));
-                await subBatch.commit();
+                if (lotsSnapshot.empty) continue;
+
+                const lotChunks: any[][] = [];
+                 for (let i = 0; i < lotsSnapshot.docs.length; i += 500) {
+                    lotChunks.push(lotsSnapshot.docs.slice(i, i + 500));
+                }
+
+                for (const lotChunk of lotChunks) {
+                    const subBatch = writeBatch(firestore);
+                    lotChunk.forEach(lotDoc => subBatch.delete(lotDoc.ref));
+                    await subBatch.commit();
+                }
             }
         }
     }
 
-    const mainBatch = writeBatch(firestore);
+    const mainSeedBatch = writeBatch(firestore);
+    const clientDocs: any = {};
+    seedClients.forEach(c => {
+        const docRef = doc(collection(firestore, 'clients'));
+        clientDocs[c.email] = docRef.id;
+        mainSeedBatch.set(docRef, {...c, id: docRef.id});
+    });
 
-    // Seed logic here...
-    // The logic has been simplified as the full implementation is extensive
-    // This is a placeholder for the full seeding logic.
-    seedClients.forEach(c => mainBatch.set(doc(collection(firestore, 'clients')), c));
-    seedSuppliers.forEach(s => mainBatch.set(doc(collection(firestore, 'suppliers')), s));
-    seedInventory.forEach(i => mainBatch.set(doc(collection(firestore, 'inventory')), i));
-    // Orders and StockEntries would need ID mapping in a real scenario
+    const supplierDocs: any = {};
+    seedSuppliers.forEach(s => {
+        const docRef = doc(collection(firestore, 'suppliers'));
+        supplierDocs[s.name] = docRef.id;
+        mainSeedBatch.set(docRef, {...s, id: docRef.id});
+    });
+
+    const inventoryDocs: any = {};
+    seedInventory.forEach(i => {
+        const docRef = doc(collection(firestore, 'inventory'));
+        inventoryDocs[i.sku] = docRef.id;
+        mainSeedBatch.set(docRef, {...i, id: docRef.id});
+    });
     
-    await mainBatch.commit();
-    await migrateInventoryToLots();
+    await mainSeedBatch.commit();
+
+    const stockEntriesWithIds = seedStockEntries.map(entry => {
+        return {
+            ...entry,
+            supplierId: supplierDocs[entry.supplierName],
+            items: entry.items.map((item: any) => ({
+                ...item,
+                itemId: inventoryDocs[item.sku],
+            })),
+        }
+    });
+
+    for(const entry of stockEntriesWithIds) {
+        await addStockEntry(entry);
+    }
+    
+    toast({ title: "Datos de prueba cargados", description: "La base de datos ha sido poblada." });
   };
 
   const migrateInventoryToLots = async () => {
     if (!firestore) return;
-    const batch = writeBatch(firestore);
     const productsToMigrate = inventory.filter(item => !item.isService && !item.lotsMigrated);
 
     if (productsToMigrate.length === 0) {
         toast({ title: "Migración no necesaria", description: "Todo el inventario ya utiliza el sistema de lotes." });
         return;
     }
-
-    for (const product of productsToMigrate) {
-        const productRef = doc(firestore, 'inventory', product.id);
-        const lotRef = doc(collection(productRef, 'stockLots'));
-        
-        const initialLot: Omit<StockLot, 'id'> = {
-            purchaseId: 'MIGRATION-INITIAL',
-            purchaseDate: new Date().toISOString(),
-            createdAt: serverTimestamp(),
-            quantity: product.stock,
-            costPrice: product.costPrice,
-            notes: 'Lote inicial creado desde inventario existente',
-        };
-        batch.set(lotRef, initialLot);
-        batch.update(productRef, { lotsMigrated: true });
+    
+    const chunks: InventoryItem[][] = [];
+    for (let i = 0; i < productsToMigrate.length; i += 498) {
+        chunks.push(productsToMigrate.slice(i, i + 498));
     }
-    await batch.commit();
+
+    for (const chunk of chunks) {
+        const batch = writeBatch(firestore);
+        for (const product of chunk) {
+            const productRef = doc(firestore, 'inventory', product.id);
+            const lotRef = doc(collection(productRef, 'stockLots'));
+            
+            const initialLot: Omit<StockLot, 'id'> = {
+                purchaseId: 'MIGRATION-INITIAL',
+                purchaseDate: new Date().toISOString(),
+                createdAt: serverTimestamp(),
+                quantity: product.stock,
+                costPrice: product.costPrice,
+                notes: 'Lote inicial creado desde inventario existente',
+            };
+            batch.set(lotRef, initialLot);
+            batch.update(productRef, { lotsMigrated: true });
+        }
+        await batch.commit();
+    }
     toast({ title: "Migración Exitosa", description: `${productsToMigrate.length} productos han sido migrados al sistema de lotes.`});
   };
   // #endregion
@@ -461,6 +524,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     updateSettings,
     seedDatabase,
     migrateInventoryToLots,
+    updateInventoryStock
   };
 
   return (
@@ -477,3 +541,5 @@ export const useDataContext = () => {
   }
   return context;
 };
+
+    
