@@ -213,63 +213,81 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!firestore) return;
 
     try {
-      await runTransaction(firestore, async (transaction) => {
-        const stockEntryRef = doc(firestore, "stockEntries", entryId);
-        const stockEntryDoc = await transaction.get(stockEntryRef);
+        await runTransaction(firestore, async (transaction) => {
+            const stockEntryRef = doc(firestore, "stockEntries", entryId);
 
-        if (!stockEntryDoc.exists()) {
-          throw new Error("La compra que intentas eliminar no existe.");
-        }
+            // Phase 1: Reads
+            const stockEntryDoc = await transaction.get(stockEntryRef);
+            if (!stockEntryDoc.exists()) {
+                throw new Error("La compra que intentas eliminar no existe.");
+            }
+            const stockEntry = stockEntryDoc.data() as StockEntry;
 
-        const stockEntry = stockEntryDoc.data() as StockEntry;
+            const itemsWithRefs = await Promise.all(stockEntry.items.map(async (item) => {
+                const productRef = doc(firestore, "inventory", item.itemId);
+                const lotsQuery = query(
+                    collection(firestore, `inventory/${item.itemId}/stockLots`),
+                    where("purchaseId", "==", entryId)
+                );
+                
+                // Firestore transactions require reads to happen via the transaction object.
+                // We cannot use getDocs directly. We must assume a single lot per purchase for this logic.
+                // A better approach would be to store lot IDs in the StockEntryItem. For now, we query outside then read in transaction.
+                // This is a simplification and might fail if multiple lots are created for the same purchaseId in the same item, which shouldn't happen with current logic.
+                const lotSnapshot = await getDocs(lotsQuery);
+                const lotDocRef = lotSnapshot.docs[0]?.ref;
 
-        for (const item of stockEntry.items) {
-          const productRef = doc(firestore, "inventory", item.itemId);
-          const lotsQuery = query(
-            collection(firestore, `inventory/${item.itemId}/stockLots`),
-            where("purchaseId", "==", entryId)
-          );
+                return {
+                    ...item,
+                    productRef,
+                    lotDocRef,
+                };
+            }));
 
-          const lotsSnapshot = await getDocs(lotsQuery);
+            const productsAndLots = await Promise.all(
+              itemsWithRefs.map(async item => {
+                if (!item.lotDocRef) return { item, productDoc: null, lotDoc: null };
+                const productDoc = await transaction.get(item.productRef);
+                const lotDoc = await transaction.get(item.lotDocRef);
+                return { item, productDoc, lotDoc };
+              })
+            );
 
-          if (lotsSnapshot.empty) {
-            // This might happen if migration happened but lots weren't created, or already deleted.
-            // We can attempt a simple stock deduction, but it's risky. Better to warn.
-            throw new Error(`No se encontró el lote de stock para ${item.name} de esta compra. No se puede revertir.`);
-          }
-
-          for (const lotDoc of lotsSnapshot.docs) {
-            const lotData = lotDoc.data() as StockLot;
-
-            // Important Safety Check:
-            // Ensure the lot hasn't been partially used. If it has, abort the deletion.
-            if (lotData.quantity < item.quantity) {
-              throw new Error(`El stock de ${item.name} (Lote: ${lotDoc.id.slice(-4)}) ya fue utilizado en una orden. No se puede eliminar la compra.`);
+            // Phase 2: Validation
+            for (const { item, productDoc, lotDoc } of productsAndLots) {
+                if (!productDoc?.exists()) {
+                    console.warn(`El producto ${item.name} (ID: ${item.itemId}) no fue encontrado. Saltando la reversión de stock para este item.`);
+                    continue;
+                }
+                if (!lotDoc?.exists()) {
+                    throw new Error(`No se encontró el lote de stock para ${item.name} de esta compra. No se puede revertir.`);
+                }
+                const lotData = lotDoc.data() as StockLot;
+                if (lotData.quantity < item.quantity) {
+                     throw new Error(`El stock de ${item.name} (Lote: ${lotDoc.id.slice(-4)}) ya fue utilizado en una orden. No se puede eliminar la compra.`);
+                }
             }
 
-            // Read current product state
-            const productDoc = await transaction.get(productRef);
-            if (!productDoc.exists()) {
-                throw new Error(`El producto ${item.name} no existe en el inventario.`);
-            }
-            const currentProduct = productDoc.data() as InventoryItem;
+            // Phase 3: Writes
+            for (const { item, productDoc, lotDoc } of productsAndLots) {
+                if (!productDoc?.exists() || !lotDoc?.exists()) continue;
 
-            // Schedule writes
-            transaction.delete(lotDoc.ref);
-            transaction.update(productRef, { stock: currentProduct.stock - item.quantity });
-          }
-        }
-        // Finally, delete the purchase entry itself
-        transaction.delete(stockEntryRef);
-      });
-      toast({ title: "Compra Eliminada", description: "La compra y su stock asociado han sido revertidos." });
+                const currentProduct = productDoc.data() as InventoryItem;
+                transaction.delete(lotDoc.ref);
+                transaction.update(item.productRef, { stock: currentProduct.stock - item.quantity });
+            }
+
+            transaction.delete(stockEntryRef);
+        });
+
+        toast({ title: "Compra Eliminada", description: "La compra y su stock asociado han sido revertidos." });
     } catch (e: any) {
-      console.error("Error al eliminar la compra:", e);
-      toast({
-        variant: "destructive",
-        title: "Error al Eliminar",
-        description: e.message,
-      });
+        console.error("Error al eliminar la compra:", e);
+        toast({
+            variant: "destructive",
+            title: "Error al Eliminar",
+            description: e.message,
+        });
     }
   };
   
@@ -664,6 +682,7 @@ export const useDataContext = () => {
     
 
     
+
 
 
 
