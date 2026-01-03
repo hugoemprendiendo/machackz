@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -37,7 +38,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useDataContext } from "@/context/data-context";
 import { NewProductDialog } from "@/components/inventory/new-product-dialog";
-import type { InventoryItem } from "@/lib/types";
+import type { InventoryItem, StockEntryItem } from "@/lib/types";
 import { extractInvoiceDetails, InvoiceDetailsOutput } from "@/ai/flows/extract-invoice-details";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
@@ -122,7 +123,7 @@ export function AiImportStepper() {
     const [step, setStep] = React.useState(1);
     const { toast } = useToast();
     const router = useRouter();
-    const { suppliers, inventory, addStockEntry, updateInventoryStock } = useDataContext();
+    const { suppliers, inventory, addStockEntry } = useDataContext();
     const [isProductDialogOpen, setProductDialogOpen] = React.useState(false);
     const [itemToCreate, setItemToCreate] = React.useState<{ name: string; sku?: string; index: number } | null>(null);
     const [isAiLoading, setIsAiLoading] = React.useState(false);
@@ -273,31 +274,33 @@ export function AiImportStepper() {
     const allItemsMapped = watchedItems.every(item => item.itemId);
 
     // --- Step 4: Final Submission ---
-    const onSubmit = (data: PurchaseFormValues) => {
+    const onSubmit = async (data: PurchaseFormValues) => {
         const supplier = suppliers.find(s => s.id === data.supplierId);
-        const newStockEntry = {
+        if (!supplier) return;
+
+        const localDate = new Date(data.date + 'T00:00:00');
+
+        const stockEntryItems: StockEntryItem[] = data.items.map(item => {
+            const product = inventory.find(p => p.id === item.itemId);
+            return {
+                itemId: item.itemId,
+                name: product?.name || 'N/A',
+                quantity: item.quantity,
+                unitCost: item.unitCost,
+                taxRate: product?.taxRate || 0,
+                hasTax: product?.hasTax || false,
+            };
+        });
+
+        await addStockEntry({
             supplierId: data.supplierId,
-            supplierName: supplier?.name || 'N/A',
+            supplierName: supplier.name,
             invoiceNumber: data.invoiceNumber || '',
-            date: new Date(data.date).toISOString(),
+            date: localDate.toISOString(),
             totalCost: totalCost,
-            items: data.items.map(item => {
-                const product = inventory.find(p => p.id === item.itemId);
-                if (product && !product.isService) {
-                    updateInventoryStock(item.itemId, product.stock + item.quantity);
-                }
-                return {
-                    itemId: item.itemId,
-                    name: product?.name || 'N/A',
-                    quantity: item.quantity,
-                    unitCost: item.unitCost,
-                    taxRate: product?.taxRate || 0,
-                    hasTax: product?.hasTax || false,
-                }
-            })
-        };
-        
-        addStockEntry(newStockEntry);
+            items: stockEntryItems,
+        });
+
         toast({ title: "Compra Registrada", description: `La compra ha sido registrada y el stock actualizado.` });
         router.push("/purchases");
     };

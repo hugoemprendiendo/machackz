@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -37,7 +38,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useDataContext } from "@/context/data-context";
 import { NewProductDialog } from "@/components/inventory/new-product-dialog";
-import type { InventoryItem } from "@/lib/types";
+import type { InventoryItem, StockEntryItem } from "@/lib/types";
 
 const purchaseItemSchema = z.object({
   itemId: z.string().min(1, "Selecciona un producto."),
@@ -54,11 +55,10 @@ const purchaseFormSchema = z.object({
 
 type PurchaseFormValues = z.infer<typeof purchaseFormSchema>;
 
-
 export default function NewPurchasePage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { suppliers, inventory, addStockEntry, updateInventoryStock } = useDataContext();
+  const { suppliers, inventory, addStockEntry } = useDataContext();
   const [isProductDialogOpen, setProductDialogOpen] = React.useState(false);
   const [lastCreatedProduct, setLastCreatedProduct] = React.useState<InventoryItem | null>(null);
   
@@ -93,41 +93,36 @@ export default function NewPurchasePage() {
   }, [watchedItems, inventory]);
   
 
-  const onSubmit = (data: PurchaseFormValues) => {
+  const onSubmit = async (data: PurchaseFormValues) => {
     const supplier = suppliers.find(s => s.id === data.supplierId);
+    if (!supplier) return;
     
-    // The selected date from the input is a string 'YYYY-MM-DD'.
-    // new Date('YYYY-MM-DD') creates a date at midnight UTC.
-    // To ensure it's stored as the user's local day, we create it with local timezone info.
     const localDate = new Date(data.date + 'T00:00:00');
 
-    const newStockEntry = {
+    const stockEntryItems: StockEntryItem[] = data.items.map(item => {
+        const product = inventory.find(p => p.id === item.itemId);
+        return {
+            itemId: item.itemId,
+            name: product?.name || 'N/A',
+            quantity: item.quantity,
+            unitCost: item.unitCost,
+            taxRate: product?.taxRate || 0,
+            hasTax: product?.hasTax || false,
+        }
+    });
+
+    await addStockEntry({
         supplierId: data.supplierId,
-        supplierName: supplier?.name || 'N/A',
+        supplierName: supplier.name,
         invoiceNumber: data.invoiceNumber || '',
         date: localDate.toISOString(),
         totalCost: totalCost,
-        items: data.items.map(item => {
-            const product = inventory.find(p => p.id === item.itemId);
-            if (product && !product.isService) {
-                updateInventoryStock(item.itemId, product.stock + item.quantity);
-            }
-            return {
-                itemId: item.itemId,
-                name: product?.name || 'N/A',
-                quantity: item.quantity,
-                unitCost: item.unitCost,
-                taxRate: product?.taxRate || 0,
-                hasTax: product?.hasTax || false,
-            }
-        })
-    };
-    
-    addStockEntry(newStockEntry);
+        items: stockEntryItems
+    });
 
     toast({
       title: "Compra Registrada",
-      description: `La compra con factura ${data.invoiceNumber} ha sido registrada y el stock ha sido actualizado.`,
+      description: `La compra ha sido registrada y el stock actualizado.`,
     });
     router.push("/purchases");
   };

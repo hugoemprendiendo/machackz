@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -54,9 +55,16 @@ import { OrderPrintLayout } from "@/components/orders/order-print-layout";
 import { OrderReceptionLayout } from "@/components/orders/order-reception-layout";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { useDebouncedCallback } from 'use-debounce';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+} from "@/components/ui/alert-dialog";
 
 const statusColors: Record<OrderStatus, string> = {
     'Abierta': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
@@ -76,12 +84,17 @@ const allOrderStatuses: OrderStatus[] = [
     'Cancelada'
 ];
 
-interface ItemToAdd extends InventoryItem {
-    quantity: number;
+interface ItemToAdd {
+  itemId: string;
+  name: string;
+  quantity: number;
+  stock: number;
+  sellingPrice: number;
+  isService: boolean;
 }
 
-function AddPartDialog({ orderId, inventory, currentOrderParts }: { orderId: string, inventory: InventoryItem[], currentOrderParts: OrderPart[] }) {
-    const { addMultiplePartsToOrder, updateInventoryStock } = useDataContext();
+function AddPartDialog({ orderId }: { orderId: string }) {
+    const { addMultiplePartsToOrder, inventory } = useDataContext();
     const { toast } = useToast();
     const [isOpen, setIsOpen] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState("");
@@ -89,13 +102,12 @@ function AddPartDialog({ orderId, inventory, currentOrderParts }: { orderId: str
 
     const filteredInventory = React.useMemo(() => {
         const lowercasedQuery = searchQuery.toLowerCase();
-        // Filter out items that are already in the order or in the "to add" list
-        const currentItemIds = new Set([...currentOrderParts.map(p => p.itemId), ...itemsToAdd.map(i => i.id)]);
+        const currentItemIds = new Set(itemsToAdd.map(i => i.itemId));
         return inventory.filter(item =>
             !currentItemIds.has(item.id) &&
-            item.name.toLowerCase().includes(lowercasedQuery)
+            (item.name.toLowerCase().includes(lowercasedQuery) || item.sku?.toLowerCase().includes(lowercasedQuery))
         );
-    }, [inventory, searchQuery, itemsToAdd, currentOrderParts]);
+    }, [inventory, searchQuery, itemsToAdd]);
 
     const handleSelectProduct = (item: InventoryItem) => {
         if (!item.isService && item.stock <= 0) {
@@ -106,62 +118,42 @@ function AddPartDialog({ orderId, inventory, currentOrderParts }: { orderId: str
             });
             return;
         }
-        setItemsToAdd(prev => [...prev, { ...item, quantity: 1 }]);
+        setItemsToAdd(prev => [...prev, { 
+            itemId: item.id, 
+            name: item.name, 
+            quantity: 1, 
+            stock: item.stock, 
+            sellingPrice: item.sellingPrice,
+            isService: item.isService 
+        }]);
         setSearchQuery('');
     };
     
     const handleQuantityChange = (itemId: string, newQuantity: number) => {
-        const itemInList = itemsToAdd.find(i => i.id === itemId);
-        const inventoryItem = inventory.find(i => i.id === itemId);
-
-        if (itemInList && inventoryItem && !inventoryItem.isService && newQuantity > inventoryItem.stock) {
+        const itemInList = itemsToAdd.find(i => i.itemId === itemId);
+        if (itemInList && !itemInList.isService && newQuantity > itemInList.stock) {
             toast({
                 variant: 'destructive',
                 title: 'Stock Insuficiente',
-                description: `Solo hay ${inventoryItem.stock} unidades de ${inventoryItem.name} disponibles.`
+                description: `Solo hay ${itemInList.stock} unidades de ${itemInList.name} disponibles.`
             });
             return;
         }
         
         setItemsToAdd(prev => prev.map(item =>
-            item.id === itemId ? { ...item, quantity: Math.max(1, newQuantity) } : item
+            item.itemId === itemId ? { ...item, quantity: Math.max(1, newQuantity) } : item
         ));
     };
     
     const handleRemoveItem = (itemId: string) => {
-        setItemsToAdd(prev => prev.filter(item => item.id !== itemId));
+        setItemsToAdd(prev => prev.filter(item => item.itemId !== itemId));
     };
 
     const handleAddItemsToOrder = async () => {
-        if (itemsToAdd.length === 0) {
-            toast({ variant: 'destructive', title: 'No hay productos', description: 'Por favor, selecciona al menos un producto para añadir.' });
-            return;
-        }
-
-        const partsToAdd: OrderPart[] = itemsToAdd.map(item => ({
-            itemId: item.id,
-            name: item.name,
-            quantity: item.quantity,
-            unitPrice: item.sellingPrice,
-            unitCost: item.costPrice,
-            taxRate: item.hasTax ? item.taxRate : 0,
-        }));
+        if (itemsToAdd.length === 0) return;
         
-        await addMultiplePartsToOrder(orderId, partsToAdd);
-
-        // This should be done in a batch in a real-world scenario
-        for (const item of itemsToAdd) {
-            if (!item.isService) {
-                await updateInventoryStock(item.id, item.stock - item.quantity);
-            }
-        }
+        await addMultiplePartsToOrder(orderId, itemsToAdd.map(i => ({ itemId: i.itemId, quantity: i.quantity })));
         
-        toast({
-            title: `${itemsToAdd.length} Producto(s) Añadido(s)`,
-            description: `Se han añadido los productos a la orden.`
-        });
-
-        // Reset state and close dialog
         setItemsToAdd([]);
         setSearchQuery("");
         setIsOpen(false);
@@ -169,7 +161,6 @@ function AddPartDialog({ orderId, inventory, currentOrderParts }: { orderId: str
 
     const handleOpenChange = (open: boolean) => {
         if (!open) {
-            // Reset state when closing
             setItemsToAdd([]);
             setSearchQuery("");
         }
@@ -184,15 +175,12 @@ function AddPartDialog({ orderId, inventory, currentOrderParts }: { orderId: str
             <DialogContent className="sm:max-w-3xl">
                 <DialogHeader>
                     <DialogTitle>Añadir Partes a la Orden</DialogTitle>
-                    <DialogDescription>
-                        Busca y selecciona uno o más productos para añadir a la orden.
-                    </DialogDescription>
+                    <DialogDescription>Busca y selecciona productos para añadir a la orden. El sistema aplicará FIFO para asignar costos.</DialogDescription>
                 </DialogHeader>
                 <div className="grid grid-cols-2 gap-6">
-                    {/* Left Column: Search and Select */}
                     <div className="flex flex-col gap-4">
                         <Input
-                            placeholder="Buscar Producto..."
+                            placeholder="Buscar Producto por nombre o SKU..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
@@ -215,52 +203,31 @@ function AddPartDialog({ orderId, inventory, currentOrderParts }: { orderId: str
                                         </div>
                                     ))
                                 ) : (
-                                    <div className="text-sm text-center text-muted-foreground p-4">
-                                        No se encontraron productos o ya están en la lista.
-                                    </div>
+                                    <div className="text-sm text-center text-muted-foreground p-4">No se encontraron productos.</div>
                                 )}
                             </div>
                         </ScrollArea>
                     </div>
-
-                    {/* Right Column: Items to Add */}
                     <div className="flex flex-col gap-4">
                         <h4 className="font-semibold text-center">Productos a Añadir</h4>
                         <ScrollArea className="h-64 border rounded-md bg-muted/50">
                             {itemsToAdd.length === 0 ? (
-                                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-                                    Selecciona productos de la izquierda.
-                                </div>
+                                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">Selecciona productos de la izquierda.</div>
                             ) : (
                                 <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Producto</TableHead>
-                                            <TableHead className="w-[80px]">Cant.</TableHead>
-                                            <TableHead className="w-[40px]"></TableHead>
-                                        </TableRow>
-                                    </TableHeader>
+                                    <TableHeader><TableRow><TableHead>Producto</TableHead><TableHead className="w-[80px]">Cant.</TableHead><TableHead className="w-[40px]"></TableHead></TableRow></TableHeader>
                                     <TableBody>
                                         {itemsToAdd.map(item => (
-                                            <TableRow key={item.id}>
+                                            <TableRow key={item.itemId}>
                                                 <TableCell className="py-2">
                                                     <div className="font-medium">{item.name}</div>
                                                     <div className="text-xs text-muted-foreground">${item.sellingPrice.toFixed(2)} c/u</div>
                                                 </TableCell>
                                                 <TableCell className="py-2">
-                                                    <Input
-                                                        type="number"
-                                                        value={item.quantity}
-                                                        onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value, 10))}
-                                                        min="1"
-                                                        max={item.isService ? undefined : item.stock}
-                                                        className="h-8 w-16"
-                                                    />
+                                                    <Input type="number" value={item.quantity} onChange={(e) => handleQuantityChange(item.itemId, parseInt(e.target.value, 10))} min="1" max={item.isService ? undefined : item.stock} className="h-8 w-16" />
                                                 </TableCell>
                                                 <TableCell className="py-2">
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleRemoveItem(item.id)}>
-                                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleRemoveItem(item.itemId)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -272,21 +239,17 @@ function AddPartDialog({ orderId, inventory, currentOrderParts }: { orderId: str
                 </div>
                 <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
-                    <Button type="button" onClick={handleAddItemsToOrder} disabled={itemsToAdd.length === 0}>
-                        <PlusCircle className="mr-2 h-4 w-4"/>
-                        Añadir {itemsToAdd.length > 0 ? `${itemsToAdd.length} Producto(s)` : ''}
-                    </Button>
+                    <Button type="button" onClick={handleAddItemsToOrder} disabled={itemsToAdd.length === 0}><PlusCircle className="mr-2 h-4 w-4"/>Añadir {itemsToAdd.length > 0 ? `${itemsToAdd.length} Producto(s)` : ''}</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     )
 }
 
-
 export default function OrderDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const { orders, clients, inventory, updateOrderStatus, updateOrderDetails, settings, updateOrderParts, updateInventoryStock } = useDataContext();
+  const { orders, clients, settings, updateOrderStatus, updateOrderDetails, removePartFromOrder } = useDataContext();
   const { toast } = useToast();
   
   const printEntregaRef = React.useRef<HTMLDivElement>(null);
@@ -302,45 +265,18 @@ export default function OrderDetailPage() {
   const [closedAtDate, setClosedAtDate] = React.useState<Date | undefined>(
     order?.closedAt ? new Date(order.closedAt) : undefined
   );
-  
-  const [localParts, setLocalParts] = React.useState<OrderPart[]>(order?.parts || []);
+  const [partToRemove, setPartToRemove] = React.useState<OrderPart | null>(null);
 
-  const debouncedUpdateParts = useDebouncedCallback((parts: OrderPart[]) => {
-    if(order?.id) {
-        updateOrderParts(order.id, parts);
-    }
-  }, 1000);
-
-  const handlePartChange = (itemId: string, field: 'unitPrice', value: number) => {
-    const updatedParts = localParts.map(p => {
-        if(p.itemId === itemId) {
-            return {...p, [field]: value };
-        }
-        return p;
-    });
-    setLocalParts(updatedParts);
-    debouncedUpdateParts(updatedParts);
+  const handleRemovePart = (part: OrderPart) => {
+    setPartToRemove(part);
   }
 
-  const handleRemovePart = (itemId: string) => {
-    const updatedParts = localParts.filter(p => p.itemId !== itemId);
-    const item = inventory.find(i => i.id === itemId);
-    const part = localParts.find(p => p.itemId === itemId);
-
-    if (item && part && !item.isService) {
-        const product = inventory.find(p => p.id === part.itemId);
-        if (product) {
-          updateInventoryStock(item.id, product.stock + part.quantity);
-        }
-    }
-    
-    setLocalParts(updatedParts);
-    if (order?.id) {
-        updateOrderParts(order.id, updatedParts);
-        toast({ title: 'Parte Eliminada', description: `Se ha eliminado la parte de la orden.`})
+  const confirmRemovePart = async () => {
+    if (order && partToRemove) {
+        await removePartFromOrder(order.id, partToRemove);
+        setPartToRemove(null);
     }
   }
-
 
   React.useEffect(() => {
     if (order) {
@@ -348,7 +284,6 @@ export default function OrderDetailPage() {
         setDiagnosis(order.diagnosis);
         setSelectedStatus(order.status);
         setClosedAtDate(order.closedAt ? new Date(order.closedAt) : new Date());
-        setLocalParts(order.parts);
     }
   }, [order]);
 
@@ -359,8 +294,8 @@ export default function OrderDetailPage() {
   }, [selectedStatus, order?.closedAt]);
   
   const { partsSubtotal, taxTotal, total } = React.useMemo(() => {
-    const subtotal = localParts.reduce((sum, part) => sum + part.unitPrice * part.quantity, 0);
-    const tax = localParts.reduce((sum, part) => {
+    const subtotal = (order?.parts || []).reduce((sum, part) => sum + part.unitPrice * part.quantity, 0);
+    const tax = (order?.parts || []).reduce((sum, part) => {
         const partTotal = part.unitPrice * part.quantity;
         const partTax = partTotal * (part.taxRate / 100);
         return sum + partTax;
@@ -370,7 +305,7 @@ export default function OrderDetailPage() {
         taxTotal: tax,
         total: subtotal + tax
     }
-  }, [localParts]);
+  }, [order?.parts]);
 
   const handlePrint = (contentRef: React.RefObject<HTMLDivElement>, title: string, styles?: string) => {
     const content = contentRef.current;
@@ -455,271 +390,124 @@ export default function OrderDetailPage() {
   };
   
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex items-center gap-4">
-        <Button variant="outline" size="icon" className="h-7 w-7" asChild>
-          <Link href="/orders">
-            <ChevronLeft className="h-4 w-4" />
-            <span className="sr-only">Back</span>
-          </Link>
-        </Button>
-        <h1 className="flex-1 shrink-0 whitespace-nowrap text-xl font-headline font-semibold tracking-tight sm:grow-0">
-          Orden {order.id}
-        </h1>
-        <Badge className={cn("text-xs font-medium", statusColors[order.status])} variant="outline">
-          {order.status}
-        </Badge>
-        <div className="ml-auto flex items-center gap-2">
-           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline"><Printer className="mr-2 h-4 w-4"/>Imprimir</Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handlePrintRecepcion}>
-                Imprimir Recepción
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handlePrintEntrega}>
-                Imprimir Entrega
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button onClick={handleDeliverAndPrint} disabled={order.status === 'Entregada / Cerrada'}>
-            <CheckCircle className="mr-2 h-4 w-4"/>Entregar e Imprimir
-          </Button>
-        </div>
-      </div>
-      <div className="grid gap-4 md:grid-cols-[1fr_250px] lg:grid-cols-3 lg:gap-8">
-        <div className="grid auto-rows-max items-start gap-4 lg:col-span-2 lg:gap-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Detalles del Dispositivo</CardTitle>
-              {isEditingDetails ? (
-                   <Button size="sm" onClick={handleSaveDetails}><Save className="mr-2 h-4 w-4" />Guardar</Button>
-              ) : (
-                  <Button size="sm" variant="outline" onClick={() => setIsEditingDetails(true)}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
-              )}
-            </CardHeader>
-            <CardContent className="grid gap-6">
-               <div className="grid grid-cols-2 gap-6">
-                  <div><span className="font-semibold">Tipo:</span> {order.deviceType}</div>
-                  <div><span className="font-semibold">Marca:</span> {order.brand}</div>
-                  <div><span className="font-semibold">Modelo:</span> {order.deviceModel}</div>
-                  <div><span className="font-semibold">No. Serie:</span> {order.serialNumber || 'N/A'}</div>
-                  <div><span className="font-semibold">RAM:</span> {order.ram || 'N/A'}</div>
-                  <div><span className="font-semibold">Disco Duro:</span> {order.hdd || 'N/A'}</div>
-                  <div><span className="font-semibold">Ciclos Batería:</span> {order.batteryCycles ?? 'N/A'}</div>
-                  <div><span className="font-semibold">Serie Batería:</span> {order.batterySerial || 'N/A'}</div>
-                  <div><span className="font-semibold">Tornillos:</span> {order.screws ?? 'N/A'}</div>
-                  <div><span className="font-semibold">Cargador:</span> {order.hasCharger ? 'Si' : 'No'}</div>
-               </div>
-               <Separator />
-               <div className="grid gap-3">
-                <div className="font-semibold">Condición del equipo</div>
-                 <p className="text-sm text-muted-foreground">{order.condition || "No se especificó."}</p>
-              </div>
-               <Separator />
-              <div className="grid gap-3">
-                <div className="font-semibold">Problema Reportado (Falla / Servicio)</div>
-                {isEditingDetails ? (
-                  <Textarea value={problemDescription} onChange={(e) => setProblemDescription(e.target.value)} rows={4}/>
-                ) : (
-                  <p className="text-sm text-muted-foreground">{order.problemDescription}</p>
-                )}
-              </div>
-               <Separator />
-               <div className="grid gap-3">
-                  <div className="font-semibold">Notas</div>
-                 <p className="text-sm text-muted-foreground">{order.notes || "Sin notas."}</p>
-              </div>
-               <Separator />
-               <div className="grid gap-3">
-                  <div className="font-semibold">¿Faltan piezas internas?</div>
-                  <p className="text-sm text-muted-foreground">{order.missingParts ? 'Si' : 'No'}</p>
-              </div>
-              <Separator />
-              <div className="grid gap-3">
-                <div className="font-semibold">Diagnóstico Técnico</div>
-                 {isEditingDetails ? (
-                  <Textarea value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} rows={4}/>
-                ) : (
-                  <p className="text-sm text-muted-foreground">{order.diagnosis || "No se ha realizado un diagnóstico."}</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Partes y Costos</CardTitle>
-              <AddPartDialog orderId={order.id} inventory={inventory} currentOrderParts={localParts}/>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[40%]">Producto</TableHead>
-                    <TableHead>Cantidad</TableHead>
-                    <TableHead>Precio Unit.</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="w-[50px]"><span className="sr-only">Actions</span></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {localParts.length === 0 ? (
-                      <TableRow>
-                          <TableCell colSpan={5} className="text-center text-muted-foreground">No se han añadido partes a esta orden.</TableCell>
-                      </TableRow>
-                  ) : (
-                      localParts.map((part) => (
-                      <TableRow key={part.itemId}>
-                          <TableCell className="font-medium">{part.name} {part.taxRate > 0 && `(IVA ${part.taxRate}%)`}</TableCell>
-                          <TableCell>
-                            {part.quantity}
-                          </TableCell>
-                           <TableCell>
-                             <Input 
-                                type="number"
-                                step="0.01"
-                                value={part.unitPrice}
-                                onChange={(e) => handlePartChange(part.itemId, 'unitPrice', parseFloat(e.target.value))}
-                                className="w-28"
-                             />
-                           </TableCell>
-                          <TableCell className="text-right">${(part.unitPrice * part.quantity).toFixed(2)}</TableCell>
-                          <TableCell>
-                            <Button variant="ghost" size="icon" onClick={() => handleRemovePart(part.itemId)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </TableCell>
-                      </TableRow>
-                      ))
-                  )}
-                   <TableRow>
-                      <TableCell colSpan={4} className="font-semibold text-right">Subtotal Partes</TableCell>
-                      <TableCell className="text-right font-semibold">${partsSubtotal.toFixed(2)}</TableCell>
-                   </TableRow>
-                    <TableRow>
-                        <TableCell colSpan={4} className="font-semibold text-right">IVA</TableCell>
-                        <TableCell className="text-right font-semibold">${taxTotal.toFixed(2)}</TableCell>
-                    </TableRow>
-                   <TableRow className="bg-muted/50">
-                      <TableCell colSpan={4} className="font-bold text-lg text-right">Total</TableCell>
-                      <TableCell className="text-right font-bold text-lg">${total.toFixed(2)}</TableCell>
-                   </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-                <CardTitle>Acciones Adicionales</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <Button variant="outline" className="w-full" asChild>
-                    <Link href={{
-                        pathname: '/orders/new',
-                        query: {
-                            customerId: order.customerId,
-                            deviceType: order.deviceType,
-                            brand: order.brand,
-                            deviceModel: order.deviceModel,
-                            serialNumber: order.serialNumber || '',
-                            ram: order.ram || '',
-                            hdd: order.hdd || ''
-                        }
-                    }}>
-                        <Copy className="mr-2 h-4 w-4"/>Crear Nueva Orden con estos datos
-                    </Link>
-                </Button>
-            </CardContent>
-          </Card>
-        </div>
-        <div className="grid auto-rows-max items-start gap-4 lg:gap-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Información del Cliente</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="flex items-center justify-between">
-                <div className="font-semibold">{client.name}</div>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href={`/clients/${client.id}`}>Ver Perfil</Link>
-                </Button>
-              </div>
-              <div className="grid gap-1">
-                <div className="font-semibold">Información de Contacto</div>
-                <address className="grid gap-0.5 not-italic text-muted-foreground">
-                  <span>{client.phone}</span>
-                  <span>{client.email}</span>
-                </address>
-              </div>
-              <Separator />
-               <div className="grid gap-1">
-                <div className="font-semibold">Dirección</div>
-                <address className="grid gap-0.5 not-italic text-muted-foreground">
-                  <span>{client.address}</span>
-                </address>
-              </div>
-            </CardContent>
-          </Card>
-           <Card>
-              <CardHeader>
-                  <CardTitle>Actualizar Estado</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                  <Select onValueChange={(value) => setSelectedStatus(value as OrderStatus)} value={selectedStatus}>
-                      <SelectTrigger>
-                          <SelectValue placeholder="Selecciona un estado" />
-                      </SelectTrigger>
-                      <SelectContent>
-                          {allOrderStatuses.map(status => (
-                              <SelectItem key={status} value={status}>{status}</SelectItem>
-                          ))}
-                      </SelectContent>
-                  </Select>
-                  
-                  {selectedStatus === 'Entregada / Cerrada' && (
-                    <div className="space-y-2">
-                        <Label>Fecha de Cierre</Label>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button
-                                variant={"outline"}
-                                className={cn(
-                                    "w-full justify-start text-left font-normal",
-                                    !closedAtDate && "text-muted-foreground"
-                                )}
-                                >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {closedAtDate ? format(closedAtDate, "PPP") : <span>Elige una fecha</span>}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                mode="single"
-                                selected={closedAtDate}
-                                onSelect={setClosedAtDate}
-                                initialFocus
-                                />
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                  )}
+    <>
+      <AlertDialog open={!!partToRemove} onOpenChange={(open) => !open && setPartToRemove(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>¿Confirmar devolución?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Esta acción devolverá <strong>{partToRemove?.quantity} x {partToRemove?.name}</strong> al inventario. El costo de la parte (${partToRemove?.unitCost.toFixed(2)}) se reembolsará y se recalculará el total de la orden.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setPartToRemove(null)}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={confirmRemovePart}>Confirmar Devolución</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-                  <Button size="sm" className="w-full" onClick={handleUpdateStatus} disabled={order.status === selectedStatus && (selectedStatus !== 'Entregada / Cerrada' || (order.closedAt && closedAtDate && new Date(order.closedAt).getTime() === closedAtDate.getTime()))}>
-                      Actualizar Estado
-                  </Button>
-              </CardContent>
-           </Card>
+      <div className="flex flex-col gap-8">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" className="h-7 w-7" asChild>
+            <Link href="/orders">
+              <ChevronLeft className="h-4 w-4" />
+              <span className="sr-only">Back</span>
+            </Link>
+          </Button>
+          <h1 className="flex-1 shrink-0 whitespace-nowrap text-xl font-headline font-semibold tracking-tight sm:grow-0">
+            Orden {order.id}
+          </h1>
+          <Badge className={cn("text-xs font-medium", statusColors[order.status])} variant="outline">
+            {order.status}
+          </Badge>
+          <div className="ml-auto flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline"><Printer className="mr-2 h-4 w-4"/>Imprimir</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handlePrintRecepcion}>Imprimir Recepción</DropdownMenuItem>
+                <DropdownMenuItem onClick={handlePrintEntrega}>Imprimir Entrega</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button onClick={handleDeliverAndPrint} disabled={order.status === 'Entregada / Cerrada'}><CheckCircle className="mr-2 h-4 w-4"/>Entregar e Imprimir</Button>
+          </div>
         </div>
-      </div>
-      <div style={{ display: 'none' }}>
-          <div ref={printEntregaRef}>
-            <OrderPrintLayout order={{...order, parts: localParts}} client={client} total={total} settings={settings} />
+        <div className="grid gap-4 md:grid-cols-[1fr_250px] lg:grid-cols-3 lg:gap-8">
+          <div className="grid auto-rows-max items-start gap-4 lg:col-span-2 lg:gap-8">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Detalles del Dispositivo</CardTitle>
+                {isEditingDetails ? <Button size="sm" onClick={handleSaveDetails}><Save className="mr-2 h-4 w-4" />Guardar</Button> : <Button size="sm" variant="outline" onClick={() => setIsEditingDetails(true)}><Pencil className="mr-2 h-4 w-4" />Editar</Button>}
+              </CardHeader>
+              <CardContent className="grid gap-6">
+                 <div className="grid grid-cols-2 gap-6">
+                    <div><span className="font-semibold">Tipo:</span> {order.deviceType}</div>
+                    <div><span className="font-semibold">Marca:</span> {order.brand}</div>
+                    <div><span className="font-semibold">Modelo:</span> {order.deviceModel}</div>
+                    <div><span className="font-semibold">No. Serie:</span> {order.serialNumber || 'N/A'}</div>
+                    <div><span className="font-semibold">RAM:</span> {order.ram || 'N/A'}</div>
+                    <div><span className="font-semibold">Disco Duro:</span> {order.hdd || 'N/A'}</div>
+                    <div><span className="font-semibold">Ciclos Batería:</span> {order.batteryCycles ?? 'N/A'}</div>
+                    <div><span className="font-semibold">Serie Batería:</span> {order.batterySerial || 'N/A'}</div>
+                    <div><span className="font-semibold">Tornillos:</span> {order.screws ?? 'N/A'}</div>
+                    <div><span className="font-semibold">Cargador:</span> {order.hasCharger ? 'Si' : 'No'}</div>
+                 </div>
+                 <Separator />
+                 <div className="grid gap-3"><div className="font-semibold">Condición del equipo</div><p className="text-sm text-muted-foreground">{order.condition || "No se especificó."}</p></div>
+                 <Separator />
+                <div className="grid gap-3"><div className="font-semibold">Problema Reportado (Falla / Servicio)</div>{isEditingDetails ? <Textarea value={problemDescription} onChange={(e) => setProblemDescription(e.target.value)} rows={4}/> : <p className="text-sm text-muted-foreground">{order.problemDescription}</p>}</div>
+                 <Separator />
+                 <div className="grid gap-3"><div className="font-semibold">Notas</div><p className="text-sm text-muted-foreground">{order.notes || "Sin notas."}</p></div>
+                 <Separator />
+                 <div className="grid gap-3"><div className="font-semibold">¿Faltan piezas internas?</div><p className="text-sm text-muted-foreground">{order.missingParts ? 'Si' : 'No'}</p></div>
+                <Separator />
+                <div className="grid gap-3"><div className="font-semibold">Diagnóstico Técnico</div>{isEditingDetails ? <Textarea value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} rows={4}/> : <p className="text-sm text-muted-foreground">{order.diagnosis || "No se ha realizado un diagnóstico."}</p>}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between"><CardTitle>Partes y Costos</CardTitle><AddPartDialog orderId={order.id} /></CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader><TableRow><TableHead className="w-[40%]">Producto</TableHead><TableHead>Costo</TableHead><TableHead>Cant.</TableHead><TableHead>Precio</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="w-[50px]"><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {(order.parts || []).length === 0 ? <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">No se han añadido partes a esta orden.</TableCell></TableRow>
+                    : (order.parts || []).map((part, index) => (
+                      <TableRow key={`${part.lotId}-${index}`}>
+                          <TableCell className="font-medium">{part.name} <span className="text-xs text-muted-foreground">(Lote: ...{part.lotId.slice(-4)})</span> {part.taxRate > 0 && <Badge variant="outline" className="ml-2">IVA {part.taxRate}%</Badge>} </TableCell>
+                          <TableCell className="text-destructive">${part.unitCost.toFixed(2)}</TableCell>
+                          <TableCell>{part.quantity}</TableCell>
+                          <TableCell>${part.unitPrice.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">${(part.unitPrice * part.quantity).toFixed(2)}</TableCell>
+                          <TableCell><Button variant="ghost" size="icon" onClick={() => handleRemovePart(part)}><Trash2 className="h-4 w-4 text-destructive" /></Button></TableCell>
+                      </TableRow>
+                    ))}
+                     <TableRow><TableCell colSpan={5} className="font-semibold text-right">Subtotal Partes</TableCell><TableCell className="text-right font-semibold">${partsSubtotal.toFixed(2)}</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={5} className="font-semibold text-right">IVA</TableCell><TableCell className="text-right font-semibold">${taxTotal.toFixed(2)}</TableCell></TableRow>
+                     <TableRow className="bg-muted/50"><TableCell colSpan={5} className="font-bold text-lg text-right">Total</TableCell><TableCell className="text-right font-bold text-lg">${total.toFixed(2)}</TableCell></TableRow>
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+            <Card><CardHeader><CardTitle>Acciones Adicionales</CardTitle></CardHeader><CardContent><Button variant="outline" className="w-full" asChild><Link href={{ pathname: '/orders/new', query: { customerId: order.customerId, deviceType: order.deviceType, brand: order.brand, deviceModel: order.deviceModel, serialNumber: order.serialNumber || '', ram: order.ram || '', hdd: order.hdd || '' } }}><Copy className="mr-2 h-4 w-4"/>Crear Nueva Orden con estos datos</Link></Button></CardContent></Card>
           </div>
-          <div ref={printRecepcionRef}>
-            <OrderReceptionLayout order={order} client={client} settings={settings} />
+          <div className="grid auto-rows-max items-start gap-4 lg:gap-8">
+            <Card><CardHeader><CardTitle>Información del Cliente</CardTitle></CardHeader><CardContent className="grid gap-4"><div className="flex items-center justify-between"><div className="font-semibold">{client.name}</div><Button variant="outline" size="sm" asChild><Link href={`/clients/${client.id}`}>Ver Perfil</Link></Button></div><div className="grid gap-1"><div className="font-semibold">Información de Contacto</div><address className="grid gap-0.5 not-italic text-muted-foreground"><span>{client.phone}</span><span>{client.email}</span></address></div><Separator /><div className="grid gap-1"><div className="font-semibold">Dirección</div><address className="grid gap-0.5 not-italic text-muted-foreground"><span>{client.address}</span></address></div></CardContent></Card>
+            <Card>
+                <CardHeader><CardTitle>Actualizar Estado</CardTitle></CardHeader>
+                <CardContent className="grid gap-4">
+                    <Select onValueChange={(value) => setSelectedStatus(value as OrderStatus)} value={selectedStatus}>
+                        <SelectTrigger><SelectValue placeholder="Selecciona un estado" /></SelectTrigger>
+                        <SelectContent>{allOrderStatuses.map(status => (<SelectItem key={status} value={status}>{status}</SelectItem>))}</SelectContent>
+                    </Select>
+                    {selectedStatus === 'Entregada / Cerrada' && (<div className="space-y-2"><Label>Fecha de Cierre</Label><Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !closedAtDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{closedAtDate ? format(closedAtDate, "PPP") : <span>Elige una fecha</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={closedAtDate} onSelect={setClosedAtDate} initialFocus /></PopoverContent></Popover></div>)}
+                    <Button size="sm" className="w-full" onClick={handleUpdateStatus} disabled={order.status === selectedStatus && (selectedStatus !== 'Entregada / Cerrada' || (order.closedAt && closedAtDate && new Date(order.closedAt).getTime() === closedAtDate.getTime()))}>Actualizar Estado</Button>
+                </CardContent>
+            </Card>
           </div>
+        </div>
+        <div style={{ display: 'none' }}><div ref={printEntregaRef}><OrderPrintLayout order={order} client={client} total={total} settings={settings} /></div><div ref={printRecepcionRef}><OrderReceptionLayout order={order} client={client} settings={settings} /></div></div>
       </div>
-    </div>
+    </>
   );
 }

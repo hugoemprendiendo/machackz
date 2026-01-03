@@ -1,3 +1,4 @@
+
 "use client";
 
 import { AlertTriangle, Database, Loader2 } from "lucide-react";
@@ -24,7 +25,54 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useDataContext } from "@/context/data-context";
 import { Alert, AlertDescription } from "../ui/alert";
+import { Separator } from "../ui/separator";
 
+function MigrateInventoryCard() {
+    const { toast } = useToast();
+    const { migrateInventoryToLots } = useDataContext();
+    const [isLoading, setIsLoading] = React.useState(false);
+    const [isDone, setIsDone] = React.useState(false);
+
+    const handleMigration = async () => {
+        setIsLoading(true);
+        try {
+            await migrateInventoryToLots();
+            setIsDone(true);
+        } catch (error) {
+             console.error("Inventory migration failed:", error);
+            toast({
+                variant: "destructive",
+                title: "Error al migrar el inventario",
+                description: "Ocurrió un error. Revisa la consola para más detalles.",
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Migrar a Inventario por Lotes (FIFO)</CardTitle>
+                <CardDescription>
+                    Ejecuta esta acción una única vez para convertir tu stock actual al nuevo sistema de lotes. Esto es necesario para la trazabilidad de costos.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                        Esta acción tomará el stock y costo actual de cada producto y creará un "lote inicial". Es seguro ejecutarla varias veces, no se duplicarán datos.
+                    </AlertDescription>
+                </Alert>
+                <Button className="w-full mt-4" onClick={handleMigration} disabled={isLoading || isDone}>
+                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isDone ? 'Migración Completada' : 'Iniciar Migración de Inventario'}
+                </Button>
+            </CardContent>
+        </Card>
+    );
+}
 
 export function SeedDatabaseCard() {
   const { toast } = useToast();
@@ -52,6 +100,9 @@ export function SeedDatabaseCard() {
   };
 
   return (
+    <>
+    <MigrateInventoryCard />
+
     <Card>
       <CardHeader>
         <CardTitle>Cargar Datos de Prueba</CardTitle>
@@ -94,5 +145,6 @@ export function SeedDatabaseCard() {
         </AlertDialog>
       </CardContent>
     </Card>
+    </>
   );
 }
