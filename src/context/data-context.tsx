@@ -246,7 +246,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (product.isService) {
         // Handle service items (no stock consumption)
         const orderRef = doc(firestore, "orders", orderId);
-        const currentOrder = ordersData?.find((o) => o.id === orderId);
+        const currentOrder = orders.find((o) => o.id === orderId);
         if (!currentOrder) continue;
   
         const newPart: OrderPart = {
@@ -281,9 +281,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
 
             if (quantityNeeded > 0) {
-                throw new Error(`Stock insuficiente para ${product.name}. Se necesitan ${item.quantity}, pero solo hay ${item.quantity - quantityNeeded} disponibles.`);
+                throw new Error(`Stock insuficiente para ${product.name}. Se necesitan ${item.quantity}, pero solo hay ${product.stock} disponibles.`);
             }
-
+            
             await runTransaction(firestore, async (transaction) => {
                 // Phase 1: Reads
                 const orderRef = doc(firestore, "orders", orderId);
@@ -349,12 +349,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { itemId, lotId, quantity } = partToRemove;
 
     const product = inventory.find(p => p.id === itemId);
+    const orderRef = doc(firestore, "orders", orderId);
+    const currentOrder = orders.find(o => o.id === orderId);
+
+    if (!currentOrder) return;
+
+    // Find the specific index of the part to remove
+    const partIndex = currentOrder.parts.findIndex(p => p.itemId === itemId && p.lotId === lotId);
+
+    if (partIndex === -1) {
+        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo encontrar la parte para eliminar.' });
+        return;
+    }
+    
+    // Create new array by removing only the item at the found index
+    const updatedParts = [
+        ...currentOrder.parts.slice(0, partIndex),
+        ...currentOrder.parts.slice(partIndex + 1),
+    ];
+
     if (!product || product.isService || lotId === 'SERVICE') {
-        // If it's a service or has no valid lot, just remove it from the order
-        const orderRef = doc(firestore, "orders", orderId);
-        const currentOrder = ordersData?.find(o => o.id === orderId);
-        if (!currentOrder) return;
-        const updatedParts = currentOrder.parts.filter(p => !(p.itemId === itemId && p.lotId === lotId));
+        // If it's a service or has no valid lot, just update the order parts array
         updateDocumentNonBlocking(orderRef, { parts: updatedParts });
         return;
     }
@@ -363,17 +378,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await runTransaction(firestore, async (transaction) => {
             const productRef = doc(firestore, 'inventory', itemId);
             const lotRef = doc(firestore, `inventory/${itemId}/stockLots`, lotId);
-            const orderRef = doc(firestore, 'orders', orderId);
 
             const lotDoc = await transaction.get(lotRef);
-            const currentOrderDoc = await transaction.get(orderRef);
             const currentProductDoc = await transaction.get(productRef);
 
-            if (!currentOrderDoc.exists() || !currentProductDoc.exists()) {
-                throw new Error("La orden o el producto ya no existen.");
+            if (!currentProductDoc.exists()) {
+                throw new Error("El producto ya no existe.");
             }
-
-            const currentOrder = currentOrderDoc.data() as Order;
+            
             const currentProduct = currentProductDoc.data() as InventoryItem;
 
             if (lotDoc.exists()) {
@@ -388,7 +400,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     quantity: quantity,
                     costPrice: partToRemove.unitCost,
                     notes: `Devolución de Orden #${orderId}`,
-                    originalPurchaseDate: partToRemove.lotId // Assumption: old lotID might contain date info or ref
+                    originalPurchaseDate: partToRemove.lotId 
                 };
                  transaction.set(lotRef, {...newLot, createdAt: serverTimestamp()});
             }
@@ -396,8 +408,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Update cached stock on product
             transaction.update(productRef, { stock: currentProduct.stock + quantity });
 
-            // Remove part from order
-            const updatedParts = currentOrder.parts.filter(p => !(p.lotId === lotId && p.itemId === itemId));
+            // Update order with the precisely modified parts array
             transaction.update(orderRef, { parts: updatedParts });
         });
         toast({ title: 'Parte Devuelta', description: 'La parte ha sido devuelta al inventario.' });
@@ -593,6 +604,7 @@ export const useDataContext = () => {
     
 
     
+
 
 
 
