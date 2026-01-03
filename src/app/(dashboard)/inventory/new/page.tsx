@@ -72,7 +72,7 @@ export default function NewInventoryPage() {
       title: "Producto Creado",
       description: `El producto ${data.name} ha sido añadido al inventario.`,
     });
-    router.push("/inventory");
+    router.push("/products");
   };
 
   return (
@@ -86,7 +86,7 @@ export default function NewInventoryPage() {
           Añadir Nuevo Producto
         </h1>
         <div className="flex items-center gap-2 ml-auto">
-            <Button type="button" variant="outline" onClick={() => router.push('/inventory')}>Cancelar</Button>
+            <Button type="button" variant="outline" onClick={() => router.push('/products')}>Cancelar</Button>
             <Button type="submit" form="inventory-new-form">Guardar Producto</Button>
         </div>
       </div>

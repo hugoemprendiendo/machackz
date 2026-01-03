@@ -84,6 +84,7 @@ export function NewProductDialog({ children, open, onOpenChange, onProductCreate
         stock: data.isService ? 0 : data.stock,
         minStock: data.isService ? 0 : data.minStock,
         sku: data.sku || '',
+        taxRate: data.hasTax ? data.taxRate : 0,
     };
     
     const newProduct = await addInventoryItem(newProductData);

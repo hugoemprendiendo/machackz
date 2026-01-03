@@ -59,7 +59,7 @@ export default function EditInventoryPage() {
   const item = React.useMemo(() => inventory.find((i) => i.id === params.id), [inventory, params.id]);
 
   React.useEffect(() => {
-    if (item && !item.isService) {
+    if (item && !item.isService && firestore) {
       const fetchLots = async () => {
         setIsLoadingLots(true);
         const lotsRef = collection(firestore, `inventory/${item.id}/stockLots`);
@@ -207,7 +207,7 @@ export default function EditInventoryPage() {
                     </div>
                     <div className="grid md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <Label htmlFor="costPrice">Precio de Costo (Promedio)</Label>
+                        <Label htmlFor="costPrice">Precio de Costo (Referencia)</Label>
                         <Input
                         id="costPrice"
                         type="number"
@@ -338,10 +338,10 @@ export default function EditInventoryPage() {
                                                 <TableCell>
                                                   {purchase ? (
                                                       <Link href={`/purchases/${purchase.id}`} className="text-primary hover:underline">
-                                                        {purchase.invoiceNumber}
+                                                        {purchase.invoiceNumber || 'N/A'}
                                                       </Link>
                                                   ) : (
-                                                    <Badge variant="secondary">{lot.purchaseId}</Badge>
+                                                    <Badge variant="secondary">{lot.purchaseId === 'MIGRATION-INITIAL' ? 'Lote Inicial' : lot.purchaseId}</Badge>
                                                   )}
                                                 </TableCell>
                                                 <TableCell>{format(parseISO(lot.purchaseDate), 'dd/MM/yyyy')}</TableCell>
