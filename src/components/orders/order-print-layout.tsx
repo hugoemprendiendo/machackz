@@ -73,8 +73,8 @@ export const OrderPrintLayout = React.forwardRef<HTMLDivElement, OrderPrintLayou
               </tr>
             </thead>
             <tbody>
-              {order.parts.map((part) => (
-                <tr key={part.itemId} className="border-b">
+              {order.parts.map((part, index) => (
+                <tr key={`${part.lotId}-${index}`} className="border-b">
                   <td className="p-2">{part.name} {part.taxRate > 0 && `(IVA ${part.taxRate}%)`}</td>
                   <td className="p-2 text-center">{part.quantity}</td>
                   <td className="p-2 text-right">${part.unitPrice.toFixed(2)}</td>
