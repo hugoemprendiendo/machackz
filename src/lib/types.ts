@@ -24,6 +24,7 @@ export type Client = {
   cfdiUse?: string;
   notes?: string;
   source?: string;
+  createdAt: string;
 };
 
 export type Supplier = {

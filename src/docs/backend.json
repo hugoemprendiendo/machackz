@@ -163,6 +163,11 @@
         "source": {
           "type": "string",
           "description": "How the client found out about the shop (e.g., 'Recomendación', 'Facebook')."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Date and time the client was created.",
+          "format": "date-time"
         }
       },
       "required": [
@@ -170,7 +175,8 @@
         "name",
         "email",
         "phone",
-        "address"
+        "address",
+        "createdAt"
       ]
     },
     "Supplier": {

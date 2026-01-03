@@ -23,7 +23,7 @@ interface DataContextProps {
   expenses: Expense[];
   settings: AppSettings;
   isLoading: boolean;
-  addClient: (client: Omit<Client, 'id'>) => Promise<any>;
+  addClient: (client: Omit<Client, 'id' | 'createdAt'>) => Promise<any>;
   updateClient: (client: Client) => Promise<void>;
   deleteClient: (clientId: string) => Promise<void>;
   addSupplier: (supplier: Omit<Supplier, 'id'>) => Promise<any>;
@@ -93,13 +93,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const isLoading = isLoadingClients || isLoadingSuppliers || isLoadingInventory || isLoadingOrders || isLoadingStockEntries || isLoadingExpenses;
 
-  const addClient = async (client: Omit<Client, 'id'>) => {
+  const addClient = async (client: Omit<Client, 'id' | 'createdAt'>) => {
     if (!clientsRef) return;
-    return addDocumentNonBlocking(clientsRef, { 
-      ...client, 
+    return addDocumentNonBlocking(clientsRef, {
+      ...client,
       source: client.source || '',
       taxId: client.taxId || '',
       cfdiUse: client.cfdiUse || '',
+      createdAt: new Date().toISOString(),
     });
   };
   const updateClient = async (updatedClient: Client) => {

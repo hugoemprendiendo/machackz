@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useRouter, useParams } from "next/navigation";
@@ -24,6 +25,7 @@ import { useDataContext } from "@/context/data-context";
 import Link from "next/link";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cfdiUses } from "@/lib/data";
+import { format, parseISO } from "date-fns";
 
 const clientFormSchema = z.object({
   name: z.string().min(2, "El nombre es requerido."),
@@ -100,6 +102,7 @@ export default function EditClientPage() {
       cfdiUse: data.cfdiUse || '',
       source: data.source || '',
       notes: data.notes,
+      createdAt: client.createdAt,
     });
     toast({
       title: "Cliente Actualizado",
@@ -130,6 +133,13 @@ export default function EditClientPage() {
         <h1 className="flex-1 shrink-0 whitespace-nowrap text-xl font-headline font-semibold tracking-tight sm:grow-0">
           Editar Cliente
         </h1>
+        <div className="flex-1">
+            {client.createdAt && (
+                <p className="text-sm text-muted-foreground text-center">
+                    Cliente desde: {format(parseISO(client.createdAt), 'dd MMMM, yyyy')}
+                </p>
+            )}
+        </div>
         <div className="flex items-center gap-2 ml-auto">
             <Button type="button" variant="outline" onClick={() => router.push('/clients')}>Cancelar</Button>
             <Button type="submit" form="client-edit-form">Guardar Cambios</Button>

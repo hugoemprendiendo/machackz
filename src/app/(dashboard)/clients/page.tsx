@@ -44,6 +44,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import { ClientImportDialog } from "@/components/clients/import-clients-dialog";
 import { Badge } from "@/components/ui/badge";
+import { format, parseISO } from "date-fns";
 
 function DeleteClientDialog({ clientId, clientName, onConfirm }: { clientId: string, clientName: string, onConfirm: () => void }) {
   return (
@@ -83,6 +84,11 @@ export default function ClientsPage() {
       description: `El cliente ${client.name} ha sido eliminado.`,
     });
   }
+  
+  const sortedClients = React.useMemo(() => 
+    [...clients].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [clients]
+  );
 
   return (
     <div className="flex flex-col gap-8">
@@ -120,13 +126,14 @@ export default function ClientsPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Teléfono</TableHead>
                   <TableHead>Fuente</TableHead>
+                  <TableHead>Fecha Creación</TableHead>
                   <TableHead>
                     <span className="sr-only">Acciones</span>
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {clients.map((client) => (
+                {sortedClients.map((client) => (
                   <TableRow key={client.id}>
                     <TableCell className="font-medium">{client.name}</TableCell>
                     <TableCell>{client.taxId}</TableCell>
@@ -135,6 +142,7 @@ export default function ClientsPage() {
                     <TableCell>
                       {client.source && <Badge variant="secondary">{client.source}</Badge>}
                     </TableCell>
+                    <TableCell>{format(parseISO(client.createdAt), 'dd/MM/yyyy')}</TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
