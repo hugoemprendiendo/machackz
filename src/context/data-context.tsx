@@ -3,7 +3,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo } from 'react';
-import { collection, doc, writeBatch, getDocs, query, serverTimestamp, runTransaction, where, orderBy, getDoc, DocumentReference, DocumentData } from "firebase/firestore";
+import { collection, doc, writeBatch, getDocs, query, serverTimestamp, runTransaction, where, orderBy, getDoc, DocumentReference, DocumentData, deleteDoc } from "firebase/firestore";
 import type { InventoryItem, Client, Supplier, Order, StockEntry, OrderStatus, OrderPart, AppSettings, StockEntryItem, StockLot, Expense } from '@/lib/types';
 import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
@@ -210,7 +210,67 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const deleteStockEntry = async (entryId: string) => {
-     deleteDocumentNonBlocking(doc(firestore, "stockEntries", entryId));
+    if (!firestore) return;
+
+    try {
+      await runTransaction(firestore, async (transaction) => {
+        const stockEntryRef = doc(firestore, "stockEntries", entryId);
+        const stockEntryDoc = await transaction.get(stockEntryRef);
+
+        if (!stockEntryDoc.exists()) {
+          throw new Error("La compra que intentas eliminar no existe.");
+        }
+
+        const stockEntry = stockEntryDoc.data() as StockEntry;
+
+        for (const item of stockEntry.items) {
+          const productRef = doc(firestore, "inventory", item.itemId);
+          const lotsQuery = query(
+            collection(firestore, `inventory/${item.itemId}/stockLots`),
+            where("purchaseId", "==", entryId)
+          );
+
+          const lotsSnapshot = await getDocs(lotsQuery);
+
+          if (lotsSnapshot.empty) {
+            // This might happen if migration happened but lots weren't created, or already deleted.
+            // We can attempt a simple stock deduction, but it's risky. Better to warn.
+            throw new Error(`No se encontró el lote de stock para ${item.name} de esta compra. No se puede revertir.`);
+          }
+
+          for (const lotDoc of lotsSnapshot.docs) {
+            const lotData = lotDoc.data() as StockLot;
+
+            // Important Safety Check:
+            // Ensure the lot hasn't been partially used. If it has, abort the deletion.
+            if (lotData.quantity < item.quantity) {
+              throw new Error(`El stock de ${item.name} (Lote: ${lotDoc.id.slice(-4)}) ya fue utilizado en una orden. No se puede eliminar la compra.`);
+            }
+
+            // Read current product state
+            const productDoc = await transaction.get(productRef);
+            if (!productDoc.exists()) {
+                throw new Error(`El producto ${item.name} no existe en el inventario.`);
+            }
+            const currentProduct = productDoc.data() as InventoryItem;
+
+            // Schedule writes
+            transaction.delete(lotDoc.ref);
+            transaction.update(productRef, { stock: currentProduct.stock - item.quantity });
+          }
+        }
+        // Finally, delete the purchase entry itself
+        transaction.delete(stockEntryRef);
+      });
+      toast({ title: "Compra Eliminada", description: "La compra y su stock asociado han sido revertidos." });
+    } catch (e: any) {
+      console.error("Error al eliminar la compra:", e);
+      toast({
+        variant: "destructive",
+        title: "Error al Eliminar",
+        description: e.message,
+      });
+    }
   };
   
   const addExpense = async (expense: Omit<Expense, 'id'>) => {
@@ -604,6 +664,7 @@ export const useDataContext = () => {
     
 
     
+
 
 
 
