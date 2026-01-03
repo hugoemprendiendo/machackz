@@ -17,6 +17,7 @@ import {
   TableRow,
   TableFooter,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useDataContext } from "@/context/data-context";
 import Link from "next/link";
@@ -26,15 +27,23 @@ import { Wrench } from "lucide-react";
 
 export default function InventoryStockPage() {
   const { inventory } = useDataContext();
+  const [filter, setFilter] = React.useState("withStock");
   
   const physicalInventory = React.useMemo(() => 
     inventory.filter(item => !item.isService), 
     [inventory]
   );
+  
+  const filteredInventory = React.useMemo(() => {
+    if (filter === "withStock") {
+      return physicalInventory.filter(item => item.stock > 0);
+    }
+    return physicalInventory;
+  }, [physicalInventory, filter]);
 
   const totalInventoryValue = React.useMemo(() =>
-    physicalInventory.reduce((total, item) => total + (item.costPrice * item.stock), 0),
-    [physicalInventory]
+    filteredInventory.reduce((total, item) => total + (item.costPrice * item.stock), 0),
+    [filteredInventory]
   );
 
   return (
@@ -51,69 +60,145 @@ export default function InventoryStockPage() {
               </Link>
             </Button>
         </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Stock Físico Actual</CardTitle>
-          <CardDescription>Lista de productos con unidades disponibles en el inventario.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Producto</TableHead>
-                <TableHead>SKU</TableHead>
-                <TableHead>Categoría</TableHead>
-                <TableHead className="text-right">Stock Actual</TableHead>
-                <TableHead className="text-right">Valor de Inventario (Costo)</TableHead>
-                <TableHead>Estado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {physicalInventory.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
-                    No hay productos en el inventario.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                physicalInventory.map((item) => {
-                  const isLowStock = item.stock > 0 && item.stock <= item.minStock;
-                  const inventoryValue = item.costPrice * item.stock;
-                  return (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">
-                        <Link href={`/inventory/${item.id}`} className="text-primary hover:underline">
-                          {item.name}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{item.sku}</TableCell>
-                      <TableCell>{item.category}</TableCell>
-                      <TableCell className="text-right">{item.stock}</TableCell>
-                      <TableCell className="text-right font-medium">${inventoryValue.toFixed(2)}</TableCell>
-                      <TableCell>
-                        {item.stock === 0 ? (
-                          <Badge variant="outline">Sin Stock</Badge>
-                        ) : isLowStock ? (
-                          <Badge variant="destructive">Stock Bajo</Badge>
-                        ) : (
-                          <Badge variant="secondary">En Stock</Badge>
-                        )}
-                      </TableCell>
+        
+      <Tabs defaultValue="withStock" onValueChange={setFilter}>
+        <div className="flex items-center">
+            <TabsList>
+                <TabsTrigger value="withStock">Con Stock</TabsTrigger>
+                <TabsTrigger value="all">Todos los Productos</TabsTrigger>
+            </TabsList>
+        </div>
+        <TabsContent value="withStock">
+            <Card>
+                <CardHeader>
+                <CardTitle>Stock Físico Actual</CardTitle>
+                <CardDescription>Lista de productos con unidades disponibles en el inventario.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                <Table>
+                    <TableHeader>
+                    <TableRow>
+                        <TableHead>Producto</TableHead>
+                        <TableHead>SKU</TableHead>
+                        <TableHead>Categoría</TableHead>
+                        <TableHead className="text-right">Stock Actual</TableHead>
+                        <TableHead className="text-right">Valor de Inventario (Costo)</TableHead>
+                        <TableHead>Estado</TableHead>
                     </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-            <TableFooter>
-                <TableRow className="bg-muted/50 font-bold">
-                    <TableCell colSpan={4} className="text-right">Valor Total del Inventario</TableCell>
-                    <TableCell className="text-right">${totalInventoryValue.toFixed(2)}</TableCell>
-                    <TableCell></TableCell>
-                </TableRow>
-            </TableFooter>
-          </Table>
-        </CardContent>
-      </Card>
+                    </TableHeader>
+                    <TableBody>
+                    {filteredInventory.length === 0 ? (
+                        <TableRow>
+                        <TableCell colSpan={6} className="h-24 text-center">
+                            No hay productos con stock.
+                        </TableCell>
+                        </TableRow>
+                    ) : (
+                        filteredInventory.map((item) => {
+                        const isLowStock = item.stock > 0 && item.stock <= item.minStock;
+                        const inventoryValue = item.costPrice * item.stock;
+                        return (
+                            <TableRow key={item.id}>
+                            <TableCell className="font-medium">
+                                <Link href={`/inventory/${item.id}`} className="text-primary hover:underline">
+                                {item.name}
+                                </Link>
+                            </TableCell>
+                            <TableCell>{item.sku}</TableCell>
+                            <TableCell>{item.category}</TableCell>
+                            <TableCell className="text-right">{item.stock}</TableCell>
+                            <TableCell className="text-right font-medium">${inventoryValue.toFixed(2)}</TableCell>
+                            <TableCell>
+                                {item.stock === 0 ? (
+                                <Badge variant="outline">Sin Stock</Badge>
+                                ) : isLowStock ? (
+                                <Badge variant="destructive">Stock Bajo</Badge>
+                                ) : (
+                                <Badge variant="secondary">En Stock</Badge>
+                                )}
+                            </TableCell>
+                            </TableRow>
+                        );
+                        })
+                    )}
+                    </TableBody>
+                    <TableFooter>
+                        <TableRow className="bg-muted/50 font-bold">
+                            <TableCell colSpan={4} className="text-right">Valor Total del Inventario</TableCell>
+                            <TableCell className="text-right">${totalInventoryValue.toFixed(2)}</TableCell>
+                            <TableCell></TableCell>
+                        </TableRow>
+                    </TableFooter>
+                </Table>
+                </CardContent>
+            </Card>
+        </TabsContent>
+        <TabsContent value="all">
+            <Card>
+                <CardHeader>
+                <CardTitle>Todos los Productos Físicos</CardTitle>
+                <CardDescription>Catálogo completo de productos físicos, incluyendo aquellos sin stock.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                <Table>
+                    <TableHeader>
+                    <TableRow>
+                        <TableHead>Producto</TableHead>
+                        <TableHead>SKU</TableHead>
+                        <TableHead>Categoría</TableHead>
+                        <TableHead className="text-right">Stock Actual</TableHead>
+                        <TableHead className="text-right">Valor de Inventario (Costo)</TableHead>
+                        <TableHead>Estado</TableHead>
+                    </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                    {filteredInventory.length === 0 ? (
+                        <TableRow>
+                        <TableCell colSpan={6} className="h-24 text-center">
+                            No hay productos en el inventario.
+                        </TableCell>
+                        </TableRow>
+                    ) : (
+                        filteredInventory.map((item) => {
+                        const isLowStock = item.stock > 0 && item.stock <= item.minStock;
+                        const inventoryValue = item.costPrice * item.stock;
+                        return (
+                            <TableRow key={item.id}>
+                            <TableCell className="font-medium">
+                                <Link href={`/inventory/${item.id}`} className="text-primary hover:underline">
+                                {item.name}
+                                </Link>
+                            </TableCell>
+                            <TableCell>{item.sku}</TableCell>
+                            <TableCell>{item.category}</TableCell>
+                            <TableCell className="text-right">{item.stock}</TableCell>
+                            <TableCell className="text-right font-medium">${inventoryValue.toFixed(2)}</TableCell>
+                            <TableCell>
+                                {item.stock === 0 ? (
+                                <Badge variant="outline">Sin Stock</Badge>
+                                ) : isLowStock ? (
+                                <Badge variant="destructive">Stock Bajo</Badge>
+                                ) : (
+                                <Badge variant="secondary">En Stock</Badge>
+                                )}
+                            </TableCell>
+                            </TableRow>
+                        );
+                        })
+                    )}
+                    </TableBody>
+                    <TableFooter>
+                        <TableRow className="bg-muted/50 font-bold">
+                            <TableCell colSpan={4} className="text-right">Valor Total del Inventario</TableCell>
+                            <TableCell className="text-right">${totalInventoryValue.toFixed(2)}</TableCell>
+                            <TableCell></TableCell>
+                        </TableRow>
+                    </TableFooter>
+                </Table>
+                </CardContent>
+            </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
