@@ -16,7 +16,7 @@ import {
   Trash2,
   Copy,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,8 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
 } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 
 const statusColors: Record<OrderStatus, string> = {
     'Abierta': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
@@ -264,7 +266,7 @@ export default function OrderDetailPage() {
   const [diagnosis, setDiagnosis] = React.useState(order?.diagnosis || '');
   const [selectedStatus, setSelectedStatus] = React.useState<OrderStatus | undefined>(order?.status);
   const [closedAtDate, setClosedAtDate] = React.useState<Date | undefined>(
-    order?.closedAt ? new Date(order.closedAt) : undefined
+    order?.closedAt ? parseISO(order.closedAt) : undefined
   );
   const [partToRemove, setPartToRemove] = React.useState<OrderPart | null>(null);
 
@@ -284,7 +286,7 @@ export default function OrderDetailPage() {
         setProblemDescription(order.problemDescription);
         setDiagnosis(order.diagnosis);
         setSelectedStatus(order.status);
-        setClosedAtDate(order.closedAt ? new Date(order.closedAt) : new Date());
+        setClosedAtDate(order.closedAt ? parseISO(order.closedAt) : new Date());
     }
   }, [order]);
 
@@ -502,7 +504,7 @@ export default function OrderDetailPage() {
                         <SelectContent>{allOrderStatuses.map(status => (<SelectItem key={status} value={status}>{status}</SelectItem>))}</SelectContent>
                     </Select>
                     {selectedStatus === 'Entregada / Cerrada' && (<div className="space-y-2"><Label>Fecha de Cierre</Label><Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !closedAtDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{closedAtDate ? format(closedAtDate, "PPP") : <span>Elige una fecha</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={closedAtDate} onSelect={setClosedAtDate} initialFocus /></PopoverContent></Popover></div>)}
-                    <Button size="sm" className="w-full" onClick={handleUpdateStatus} disabled={order.status === selectedStatus && (selectedStatus !== 'Entregada / Cerrada' || (order.closedAt && closedAtDate && new Date(order.closedAt).getTime() === closedAtDate.getTime()))}>Actualizar Estado</Button>
+                    <Button size="sm" className="w-full" onClick={handleUpdateStatus} disabled={order.status === selectedStatus && (selectedStatus !== 'Entregada / Cerrada' || (order.closedAt && closedAtDate && parseISO(order.closedAt).getTime() === closedAtDate.getTime()))}>Actualizar Estado</Button>
                 </CardContent>
             </Card>
           </div>
