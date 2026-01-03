@@ -42,7 +42,6 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
 
   const [step, setStep] = useState(1);
   const [csvData, setCsvData] = useState<{ headers: string[], rows: string[][] }>({ headers: [], rows: [] });
-  const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
@@ -51,7 +50,6 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
   const resetState = () => {
     setStep(1);
     setCsvData({ headers: [], rows: [] });
-    setFileName('');
     setError('');
     setIsImporting(false);
     setImportProgress(0);
@@ -105,7 +103,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
     return csvData.rows.map(row => ({
       name: row[nameIndex] || '',
       email: emailIndex > -1 ? row[emailIndex] : '',
-      phone: row[phoneIndex] || '',
+      phone: phoneIndex > -1 ? row[phoneIndex] : '',
       address: addressIndex > -1 ? row[addressIndex] : '',
       source: sourceIndex > -1 ? row[sourceIndex] : '',
       notes: notesIndex > -1 ? row[notesIndex] : '',
@@ -153,7 +151,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Importar Clientes desde CSV (Paso {step} de 3)</DialogTitle>
           {step === 1 && <DialogDescription>Sube un archivo CSV para importar múltiples clientes a la vez.</DialogDescription>}
@@ -218,16 +216,18 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
                         </div>
                     ))}
                 </div>
-                <Alert>
-                    <Sparkles className="h-4 w-4" />
-                    <AlertTitle>Vista Previa de los Datos (Primeras 5 filas)</AlertTitle>
-                    <AlertDescription>
+                <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4" />
+                        Vista Previa de los Datos (Primeras 5 filas)
+                    </Label>
+                    <div className="w-full overflow-x-auto rounded-lg border">
                         <Table>
                             <TableHeader><TableRow>{csvData.headers.map(h => <TableHead key={h}>{h}</TableHead>)}</TableRow></TableHeader>
-                            <TableBody>{csvData.rows.slice(0,5).map((row, rIndex) => <TableRow key={rIndex}>{row.map((cell, cIndex) => <TableCell key={cIndex}>{cell}</TableCell>)}</TableRow>)}</TableBody>
+                            <TableBody>{csvData.rows.slice(0,5).map((row, rIndex) => <TableRow key={rIndex}>{row.map((cell, cIndex) => <TableCell key={cIndex} className="whitespace-nowrap">{cell}</TableCell>)}</TableRow>)}</TableBody>
                         </Table>
-                    </AlertDescription>
-                </Alert>
+                    </div>
+                </div>
             </div>
         )}
 
