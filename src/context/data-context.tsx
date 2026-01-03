@@ -227,9 +227,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // #region FIFO and Inventory Logic
   const addMultiplePartsToOrder = async (orderId: string, items: { itemId: string; quantity: number }[]) => {
     if (!firestore) return;
+
     for (const item of items) {
         const product = inventory.find(p => p.id === item.itemId);
-        if (!product) continue;
+
+        if (!product) {
+            toast({ variant: 'destructive', title: 'Error', description: `Producto con ID ${item.itemId} no encontrado.` });
+            continue; 
+        }
+        
         if (product.isService) {
             // Handle service items (no stock consumption)
             const orderRef = doc(firestore, 'orders', orderId);
@@ -253,9 +259,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         try {
             await runTransaction(firestore, async (transaction) => {
                 const productRef = doc(firestore, 'inventory', item.itemId);
+
+                // Ensure product is not a service before querying lots
+                if (!product) {
+                    toast({ variant: 'destructive', title: 'Error', description: `Producto con ID ${item.itemId} no encontrado.` });
+                    return;
+                }
+                
+                // Verify product is not a service before proceeding
+                if (product.isService) {
+                    toast({ variant: 'destructive', title: 'Error', description: `No se puede agregar un servicio como parte.` });
+                    return;
+                }
+
                 const lotsQuery = query(collection(firestore, `inventory/${item.itemId}/stockLots`), where('quantity', '>', 0), orderBy('createdAt', 'asc'));
                 
-                // Fetch must be inside the transaction
                 const lotsSnapshot = await transaction.get(lotsQuery);
 
                 let quantityNeeded = item.quantity;
@@ -286,7 +304,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
 
                 if (quantityNeeded > 0) {
-                    throw new Error(`Stock insuficiente para ${product.name}. Se necesitan ${item.quantity}, pero solo hay ${product.stock - totalStockConsumed} disponibles.`);
+                     throw new Error(`Stock insuficiente para ${product.name}. Se necesitan ${item.quantity}, pero solo hay ${product.stock - totalStockConsumed} disponibles.`);
                 }
 
                 const orderRef = doc(firestore, 'orders', orderId);
