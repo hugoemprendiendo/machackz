@@ -231,11 +231,11 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
                         <Sparkles className="h-4 w-4" />
                         Vista Previa de los Datos (Primeras 5 filas)
                     </Label>
-                    <div className="w-full overflow-x-auto rounded-lg border">
-                        <Table>
-                            <TableHeader><TableRow>{csvData.headers.map((h, i) => <TableHead key={`${h}-${i}`}>{h}</TableHead>)}</TableRow></TableHeader>
-                            <TableBody>{csvData.rows.slice(0,5).map((row, rIndex) => <TableRow key={rIndex}>{row.map((cell, cIndex) => <TableCell key={cIndex} className="whitespace-nowrap">{cell}</TableCell>)}</TableRow>)}</TableBody>
-                        </Table>
+                    <div className="relative w-full overflow-auto rounded-lg border">
+                      <Table>
+                          <TableHeader><TableRow>{csvData.headers.map((h, i) => <TableHead key={`${h}-${i}`}>{h}</TableHead>)}</TableRow></TableHeader>
+                          <TableBody>{csvData.rows.slice(0,5).map((row, rIndex) => <TableRow key={rIndex}>{row.map((cell, cIndex) => <TableCell key={cIndex} className="whitespace-nowrap">{cell}</TableCell>)}</TableRow>)}</TableBody>
+                      </Table>
                     </div>
                 </div>
             </div>
