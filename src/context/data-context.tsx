@@ -3,7 +3,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo } from 'react';
-import { collection, doc, writeBatch, getDocs, query, serverTimestamp, runTransaction, where, orderBy } from "firebase/firestore";
+import { collection, doc, writeBatch, getDocs, query, serverTimestamp, runTransaction, where, orderBy, getDoc } from "firebase/firestore";
 import type { InventoryItem, Client, Supplier, Order, StockEntry, OrderStatus, OrderPart, AppSettings, StockEntryItem, StockLot } from '@/lib/types';
 import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
@@ -256,28 +256,35 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             updateDocumentNonBlocking(orderRef, { parts: updatedParts });
             toast({ title: "Servicio Añadido", description: `${item.quantity} x ${product.name} añadido(s) a la orden.` });
         } else {
-            // Handle physical items (stock consumption)
+             // Handle physical items (stock consumption)
             try {
+                const lotsCollectionRef = collection(firestore, `inventory/${item.itemId}/stockLots`);
+                const lotsQuery = query(lotsCollectionRef, where('quantity', '>', 0), orderBy('createdAt', 'asc'));
+                const lotsSnapshot = await getDocs(lotsQuery);
+
+                let availableStock = 0;
+                for (const lotDoc of lotsSnapshot.docs) {
+                    availableStock += lotDoc.data().quantity;
+                }
+                
+                if (availableStock < item.quantity) {
+                    throw new Error(`Stock insuficiente para ${product.name}. Se necesitan ${item.quantity}, pero solo hay ${availableStock} disponibles.`);
+                }
+
                 await runTransaction(firestore, async (transaction) => {
-                    const productRef = doc(firestore, 'inventory', item.itemId);
-                    const lotsCollectionRef = collection(productRef, 'stockLots');
-                    const lotsQuery = query(lotsCollectionRef, where('quantity', '>', 0), orderBy('createdAt', 'asc'));
-                    
-                    const lotsSnapshot = await transaction.get(lotsQuery);
-          
                     let quantityNeeded = item.quantity;
                     const newParts: OrderPart[] = [];
                     let totalStockConsumed = 0;
-                    
-                    const availableStock = lotsSnapshot.docs.reduce((sum, doc) => sum + doc.data().quantity, 0);
-                    if (availableStock < quantityNeeded) {
-                      throw new Error(`Stock insuficiente para ${product.name}. Se necesitan ${item.quantity}, pero solo hay ${availableStock} disponibles.`);
-                    }
         
                     for (const lotDoc of lotsSnapshot.docs) {
                         if (quantityNeeded <= 0) break;
-                        const lot = { id: lotDoc.id, ...lotDoc.data() } as StockLot;
-                        const lotRef = doc(lotsCollectionRef, lot.id);
+                        const lotRef = doc(firestore, `inventory/${item.itemId}/stockLots`, lotDoc.id);
+                        
+                        const lotInTransaction = await transaction.get(lotRef);
+                        if (!lotInTransaction.exists()) {
+                            throw new Error(`El lote ${lotDoc.id} no fue encontrado en la transacción.`);
+                        }
+                        const lot = lotInTransaction.data() as StockLot;
                         
                         const consume = Math.min(quantityNeeded, lot.quantity);
                         
@@ -290,7 +297,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                             unitPrice: product.sellingPrice,
                             unitCost: lot.costPrice,
                             taxRate: product.taxRate,
-                            lotId: lot.id
+                            lotId: lotDoc.id
                         });
                         
                         quantityNeeded -= consume;
@@ -306,6 +313,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     
                     transaction.update(orderRef, { parts: [...currentOrder.parts, ...newParts] });
 
+                    const productRef = doc(firestore, 'inventory', item.itemId);
                     const currentProductDoc = await transaction.get(productRef);
                     if (!currentProductDoc.exists()) {
                         throw new Error("El producto no existe.");
