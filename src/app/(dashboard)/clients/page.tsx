@@ -85,10 +85,14 @@ export default function ClientsPage() {
     });
   }
   
-  const sortedClients = React.useMemo(() => 
-    [...clients].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [clients]
-  );
+  const sortedClients = React.useMemo(() => {
+    if (!clients) return [];
+    return [...clients].sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+    });
+  }, [clients]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -142,7 +146,9 @@ export default function ClientsPage() {
                     <TableCell>
                       {client.source && <Badge variant="secondary">{client.source}</Badge>}
                     </TableCell>
-                    <TableCell>{format(parseISO(client.createdAt), 'dd/MM/yyyy')}</TableCell>
+                    <TableCell>
+                      {client.createdAt ? format(parseISO(client.createdAt), 'dd/MM/yyyy') : ''}
+                    </TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
