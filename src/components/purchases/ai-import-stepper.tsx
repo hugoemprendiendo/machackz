@@ -515,12 +515,14 @@ export function AiImportStepper() {
                                 <TableBody>
                                     {watchedItems.map((item, index) => {
                                         const product = inventory.find(p => p.id === item.itemId);
+                                        const unitCost = Number(item.unitCost) || 0;
+                                        const quantity = Number(item.quantity) || 0;
                                         return (
                                         <TableRow key={`${item.itemId}-${index}`}>
                                             <TableCell>{product?.name}</TableCell>
-                                            <TableCell>{item.quantity}</TableCell>
-                                            <TableCell>${item.unitCost.toFixed(2)}</TableCell>
-                                            <TableCell className="text-right">${(item.quantity * item.unitCost).toFixed(2)}</TableCell>
+                                            <TableCell>{quantity}</TableCell>
+                                            <TableCell>${unitCost.toFixed(2)}</TableCell>
+                                            <TableCell className="text-right">${(quantity * unitCost).toFixed(2)}</TableCell>
                                         </TableRow>
                                         )
                                     })}
