@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo } from 'react';
@@ -227,98 +228,89 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // #region FIFO and Inventory Logic
   const addMultiplePartsToOrder = async (orderId: string, items: { itemId: string; quantity: number }[]) => {
     if (!firestore) return;
-
+  
     for (const item of items) {
-        const product = inventory.find(p => p.id === item.itemId);
-
-        if (!product) {
-            toast({ variant: 'destructive', title: 'Error', description: `Producto con ID ${item.itemId} no encontrado.` });
-            continue; 
-        }
-        
-        if (product.isService) {
-            // Handle service items (no stock consumption)
-            const orderRef = doc(firestore, 'orders', orderId);
-            const currentOrder = ordersData?.find(o => o.id === orderId);
-            if (!currentOrder) continue;
-
-            const newPart: OrderPart = {
-                itemId: product.id,
-                name: product.name,
-                quantity: item.quantity,
-                unitPrice: product.sellingPrice,
-                unitCost: 0,
-                taxRate: product.taxRate,
-                lotId: 'SERVICE'
-            };
-            const updatedParts = [...currentOrder.parts, newPart];
-            updateDocumentNonBlocking(orderRef, { parts: updatedParts });
-            continue;
-        }
-
+      const product = inventory.find(p => p.id === item.itemId);
+  
+      if (!product) {
+        toast({ variant: 'destructive', title: 'Error', description: `Producto con ID ${item.itemId} no encontrado.` });
+        continue;
+      }
+  
+      if (product.isService) {
+        // Handle service items (no stock consumption)
+        const orderRef = doc(firestore, 'orders', orderId);
+        const currentOrder = ordersData?.find(o => o.id === orderId);
+        if (!currentOrder) continue;
+  
+        const newPart: OrderPart = {
+          itemId: product.id,
+          name: product.name,
+          quantity: item.quantity,
+          unitPrice: product.sellingPrice,
+          unitCost: 0,
+          taxRate: product.taxRate,
+          lotId: 'SERVICE'
+        };
+        const updatedParts = [...currentOrder.parts, newPart];
+        updateDocumentNonBlocking(orderRef, { parts: updatedParts });
+        toast({ title: "Servicio Añadido", description: `${item.quantity} x ${product.name} añadido(s) a la orden.` });
+  
+      } else {
+        // Handle physical items (stock consumption)
         try {
-            await runTransaction(firestore, async (transaction) => {
-                const productRef = doc(firestore, 'inventory', item.itemId);
+          await runTransaction(firestore, async (transaction) => {
+            const productRef = doc(firestore, 'inventory', item.itemId);
+            const lotsQuery = query(collection(firestore, `inventory/${item.itemId}/stockLots`), where('quantity', '>', 0), orderBy('createdAt', 'asc'));
+            
+            const lotsSnapshot = await transaction.get(lotsQuery);
+  
+            let quantityNeeded = item.quantity;
+            const newParts: OrderPart[] = [];
+            let totalStockConsumed = 0;
+            
+            // Check available stock from lots before proceeding
+            const availableStock = lotsSnapshot.docs.reduce((sum, doc) => sum + doc.data().quantity, 0);
+            if (availableStock < quantityNeeded) {
+              throw new Error(`Stock insuficiente para ${product.name}. Se necesitan ${item.quantity}, pero solo hay ${availableStock} disponibles.`);
+            }
 
-                // Ensure product is not a service before querying lots
-                if (!product) {
-                    toast({ variant: 'destructive', title: 'Error', description: `Producto con ID ${item.itemId} no encontrado.` });
-                    return;
-                }
-                
-                // Verify product is not a service before proceeding
-                if (product.isService) {
-                    toast({ variant: 'destructive', title: 'Error', description: `No se puede agregar un servicio como parte.` });
-                    return;
-                }
-
-                const lotsQuery = query(collection(firestore, `inventory/${item.itemId}/stockLots`), where('quantity', '>', 0), orderBy('createdAt', 'asc'));
-                
-                const lotsSnapshot = await transaction.get(lotsQuery);
-
-                let quantityNeeded = item.quantity;
-                const newParts: OrderPart[] = [];
-                let totalStockConsumed = 0;
-
-                for (const lotDoc of lotsSnapshot.docs) {
-                    if (quantityNeeded <= 0) break;
-                    const lot = { id: lotDoc.id, ...lotDoc.data() } as StockLot;
-                    const lotRef = doc(firestore, `inventory/${item.itemId}/stockLots`, lot.id);
-                    
-                    const consume = Math.min(quantityNeeded, lot.quantity);
-                    
-                    transaction.update(lotRef, { quantity: lot.quantity - consume });
-                    
-                    newParts.push({
-                        itemId: item.itemId,
-                        name: product.name,
-                        quantity: consume,
-                        unitPrice: product.sellingPrice,
-                        unitCost: lot.costPrice,
-                        taxRate: product.taxRate,
-                        lotId: lot.id
-                    });
-                    
-                    quantityNeeded -= consume;
-                    totalStockConsumed += consume;
-                }
-
-                if (quantityNeeded > 0) {
-                     throw new Error(`Stock insuficiente para ${product.name}. Se necesitan ${item.quantity}, pero solo hay ${product.stock - totalStockConsumed} disponibles.`);
-                }
-
-                const orderRef = doc(firestore, 'orders', orderId);
-                const currentOrderDoc = await transaction.get(orderRef);
-                const currentOrder = currentOrderDoc.data() as Order;
-                
-                transaction.update(orderRef, { parts: [...currentOrder.parts, ...newParts] });
-                transaction.update(productRef, { stock: product.stock - totalStockConsumed });
-            });
-            toast({ title: "Parte(s) Añadida(s)", description: `${item.quantity} x ${product.name} añadido(s) a la orden.` });
+            for (const lotDoc of lotsSnapshot.docs) {
+              if (quantityNeeded <= 0) break;
+              const lot = { id: lotDoc.id, ...lotDoc.data() } as StockLot;
+              const lotRef = doc(firestore, `inventory/${item.itemId}/stockLots`, lot.id);
+              
+              const consume = Math.min(quantityNeeded, lot.quantity);
+              
+              transaction.update(lotRef, { quantity: lot.quantity - consume });
+              
+              newParts.push({
+                itemId: item.itemId,
+                name: product.name,
+                quantity: consume,
+                unitPrice: product.sellingPrice,
+                unitCost: lot.costPrice,
+                taxRate: product.taxRate,
+                lotId: lot.id
+              });
+              
+              quantityNeeded -= consume;
+              totalStockConsumed += consume;
+            }
+  
+            const orderRef = doc(firestore, 'orders', orderId);
+            const currentOrderDoc = await transaction.get(orderRef);
+            const currentOrder = currentOrderDoc.data() as Order;
+            
+            transaction.update(orderRef, { parts: [...currentOrder.parts, ...newParts] });
+            transaction.update(productRef, { stock: product.stock - totalStockConsumed });
+          });
+          toast({ title: "Parte(s) Añadida(s)", description: `${item.quantity} x ${product.name} añadido(s) a la orden.` });
         } catch (e: any) {
-            console.error("Transaction failed: ", e);
-            toast({ variant: 'destructive', title: "Error al añadir parte", description: e.message });
+          console.error("Transaction failed: ", e);
+          toast({ variant: 'destructive', title: "Error al añadir parte", description: e.message });
         }
+      }
     }
   };
   
