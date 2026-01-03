@@ -1,3 +1,4 @@
+
 "use client";
 
 import { PlusCircle, MoreHorizontal, Trash2, Wand2 } from "lucide-react";
@@ -38,7 +39,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useDataContext } from "@/context/data-context";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -131,7 +132,7 @@ export default function PurchasesPage() {
                             </Link>
                         </TableCell>
                         <TableCell>{entry.supplierName}</TableCell>
-                        <TableCell>{format(new Date(entry.date), "dd/MM/yyyy")}</TableCell>
+                        <TableCell>{format(parseISO(entry.date), "dd/MM/yyyy")}</TableCell>
                         <TableCell className="text-right">${entry.totalCost.toFixed(2)}</TableCell>
                         <TableCell>
                         <DropdownMenu>
