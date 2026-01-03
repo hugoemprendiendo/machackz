@@ -2,8 +2,8 @@
 "use client";
 
 import React, { useState } from 'react';
-import { useCSVReader } from 'react-papaparse';
-import { Upload, File, CheckCircle, AlertTriangle, X } from 'lucide-react';
+import { useCSVReader, readString } from 'react-papaparse';
+import { Upload, File, CheckCircle, AlertTriangle, X, ArrowLeft, ArrowRight, Wand2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -19,6 +19,9 @@ import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '../ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Progress } from '../ui/progress';
+import { Label } from '../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 
 interface ClientImportDialogProps {
   children: React.ReactNode;
@@ -26,67 +29,101 @@ interface ClientImportDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const requiredHeaders = ['name', 'email', 'phone', 'address', 'notes'];
+const clientFields = ['name', 'email', 'phone', 'address', 'source', 'notes'] as const;
+type ClientField = typeof clientFields[number];
+
+type MappedFields = Partial<Record<ClientField, string>>;
+
 
 export function ClientImportDialog({ children, open, onOpenChange }: ClientImportDialogProps) {
   const { CSVReader } = useCSVReader();
   const { addClient } = useDataContext();
   const { toast } = useToast();
 
-  const [parsedData, setParsedData] = useState<any[]>([]);
+  const [step, setStep] = useState(1);
+  const [csvData, setCsvData] = useState<{ headers: string[], rows: string[][] }>({ headers: [], rows: [] });
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
+  const [mappedFields, setMappedFields] = useState<MappedFields>({});
 
   const resetState = () => {
-    setParsedData([]);
+    setStep(1);
+    setCsvData({ headers: [], rows: [] });
     setFileName('');
     setError('');
     setIsImporting(false);
     setImportProgress(0);
+    setMappedFields({});
+  };
+  
+  const handleDialogChange = (isOpen: boolean) => {
+    if (!isOpen) {
+      resetState();
+    }
+    onOpenChange(isOpen);
   };
 
   const handleUploadAccepted = (results: any) => {
     setError('');
-    const headers = results.data[0].map((h: string) => h.toLowerCase().trim());
-    const missingHeaders = requiredHeaders.filter(
-      (rh) => rh !== 'notes' && rh !== 'address' && !headers.includes(rh)
-    );
-
-    if (missingHeaders.length > 0) {
-      setError(`Faltan las siguientes columnas requeridas en el archivo CSV: ${missingHeaders.join(', ')}`);
+    const fileData = results.data;
+    if (fileData.length < 2) {
+      setError("El archivo CSV debe tener al menos una fila de encabezados y una fila de datos.");
       return;
     }
-
-    const data = results.data.slice(1).map((row: any) => {
-      const client: any = {};
-      headers.forEach((header: string, i: number) => {
-        if(requiredHeaders.includes(header)){
-            client[header] = row[i];
-        }
-      });
-      return client;
-    }).filter((client: any) => client.name && (client.phone || client.email)); // Filter out empty rows
-
-    setParsedData(data);
+    const headers = fileData[0].map((h: string) => h.trim());
+    const rows = fileData.slice(1).filter((row: any[]) => row.some(cell => cell && cell.trim() !== ''));
+    
+    setCsvData({ headers, rows });
+    setFileName(results.file.name);
+    setStep(2);
+    toast({ title: "Archivo Cargado", description: "Por favor, mapea las columnas del archivo." });
   };
+  
+  const handleMappingSubmit = () => {
+     if (!mappedFields.name || !mappedFields.phone) {
+        toast({
+            variant: "destructive",
+            title: "Mapeo Incompleto",
+            description: "Debes mapear al menos los campos 'name' y 'phone'."
+        });
+        return;
+    }
+    setStep(3);
+  };
+
+  const importedClientsPreview = React.useMemo(() => {
+    if (csvData.rows.length === 0) return [];
+    
+    const nameIndex = csvData.headers.indexOf(mappedFields.name!);
+    const emailIndex = mappedFields.email ? csvData.headers.indexOf(mappedFields.email) : -1;
+    const phoneIndex = csvData.headers.indexOf(mappedFields.phone!);
+    const addressIndex = mappedFields.address ? csvData.headers.indexOf(mappedFields.address) : -1;
+    const sourceIndex = mappedFields.source ? csvData.headers.indexOf(mappedFields.source) : -1;
+    const notesIndex = mappedFields.notes ? csvData.headers.indexOf(mappedFields.notes) : -1;
+
+    return csvData.rows.map(row => ({
+      name: row[nameIndex] || '',
+      email: emailIndex > -1 ? row[emailIndex] : '',
+      phone: row[phoneIndex] || '',
+      address: addressIndex > -1 ? row[addressIndex] : '',
+      source: sourceIndex > -1 ? row[sourceIndex] : '',
+      notes: notesIndex > -1 ? row[notesIndex] : '',
+    }));
+
+  }, [csvData, mappedFields]);
+
   
   const handleImport = async () => {
     setIsImporting(true);
     let importedCount = 0;
-    const totalToImport = parsedData.length;
+    const totalToImport = importedClientsPreview.length;
 
     for (let i = 0; i < totalToImport; i++) {
-        const client = parsedData[i];
+        const client = importedClientsPreview[i];
         try {
-            await addClient({
-                name: client.name || '',
-                email: client.email || '',
-                phone: client.phone || '',
-                address: client.address || '',
-                notes: client.notes || '',
-            });
+            await addClient(client);
             importedCount++;
         } catch (e) {
             console.error(`Error al importar cliente ${client.name}:`, e);
@@ -104,7 +141,7 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
   }
   
   const createCSVTemplate = () => {
-    const csvContent = "data:text/csv;charset=utf-8," + requiredHeaders.join(',') + '\n';
+    const csvContent = "data:text/csv;charset=utf-8," + clientFields.filter(f => f !== 'notes').join(',') + '\n';
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -115,47 +152,36 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
   }
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => {
-        if (!isOpen) {
-            resetState();
-        }
-        onOpenChange(isOpen)
-    }}>
+    <Dialog open={open} onOpenChange={handleDialogChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Importar Clientes desde CSV</DialogTitle>
-          <DialogDescription>
-            Sube un archivo CSV para importar múltiples clientes a la vez.
-          </DialogDescription>
+          <DialogTitle>Importar Clientes desde CSV (Paso {step} de 3)</DialogTitle>
+          {step === 1 && <DialogDescription>Sube un archivo CSV para importar múltiples clientes a la vez.</DialogDescription>}
+          {step === 2 && <DialogDescription>Asigna las columnas de tu archivo CSV a los campos de cliente correspondientes.</DialogDescription>}
+          {step === 3 && <DialogDescription>Verifica los datos y confirma la importación.</DialogDescription>}
         </DialogHeader>
 
-        {parsedData.length === 0 && !isImporting && (
+        {step === 1 && (
           <CSVReader
-            onUploadAccepted={(results: any) => {
-              handleUploadAccepted(results);
-            }}
-            onDragOver={(event: DragEvent) => {
-                event.preventDefault();
-            }}
-            onDragLeave={(event: DragEvent) => {
-                event.preventDefault();
-            }}
+            onUploadAccepted={handleUploadAccepted}
+            onDragOver={(event: DragEvent) => { event.preventDefault(); }}
+            onDragLeave={(event: DragEvent) => { event.preventDefault(); }}
           >
             {({ getRootProps, acceptedFile, getRemoveFileProps }: any) => (
-              <div {...getRootProps()} className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-300 rounded-lg text-center my-4 cursor-pointer hover:border-primary hover:bg-muted/50 transition-colors">
+              <div {...getRootProps()} className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-muted rounded-lg text-center my-4 cursor-pointer hover:border-primary hover:bg-muted/50 transition-colors">
                 <Upload className="h-12 w-12 text-gray-400" />
                 <p className="mt-4 text-gray-600">
                   Arrastra y suelta tu archivo CSV aquí, o haz clic para seleccionarlo.
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  El archivo debe contener las columnas: name, email, phone. Opcionales: address, notes.
+                <p className="text-xs text-muted-foreground mt-1">
+                  Asegúrate de que el archivo tenga una fila de encabezados.
                 </p>
                 {acceptedFile && (
-                    <div className="mt-4 flex items-center gap-2 bg-gray-100 p-2 rounded-md">
+                    <div className="mt-4 flex items-center gap-2 bg-gray-100 p-2 rounded-md dark:bg-muted/50">
                         <File className="h-5 w-5 text-gray-500" />
                         <span className="text-sm">{acceptedFile.name}</span>
-                        <button {...getRemoveFileProps()} className="ml-2 p-1 rounded-full hover:bg-gray-200">
+                        <button {...getRemoveFileProps()} className="ml-2 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-muted">
                             <X className="h-4 w-4" />
                         </button>
                     </div>
@@ -173,12 +199,44 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
             )}
           </CSVReader>
         )}
+        
+        {step === 2 && (
+            <div className='space-y-4'>
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                    {clientFields.map(field => (
+                        <div key={field} className="space-y-2">
+                            <Label htmlFor={`map-${field}`} className="capitalize">
+                                {field} {field === 'name' || field === 'phone' ? '*' : ''}
+                            </Label>
+                            <Select onValueChange={(value) => setMappedFields(prev => ({...prev, [field]: value}))}>
+                                <SelectTrigger id={`map-${field}`}>
+                                    <SelectValue placeholder="Seleccionar columna..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {csvData.headers.map(header => <SelectItem key={header} value={header}>{header}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    ))}
+                </div>
+                <Alert>
+                    <Sparkles className="h-4 w-4" />
+                    <AlertTitle>Vista Previa de los Datos (Primeras 5 filas)</AlertTitle>
+                    <AlertDescription>
+                        <Table>
+                            <TableHeader><TableRow>{csvData.headers.map(h => <TableHead key={h}>{h}</TableHead>)}</TableRow></TableHeader>
+                            <TableBody>{csvData.rows.slice(0,5).map((row, rIndex) => <TableRow key={rIndex}>{row.map((cell, cIndex) => <TableCell key={cIndex}>{cell}</TableCell>)}</TableRow>)}</TableBody>
+                        </Table>
+                    </AlertDescription>
+                </Alert>
+            </div>
+        )}
 
-        {parsedData.length > 0 && !isImporting && (
+        {step === 3 && !isImporting && (
           <div>
             <h4 className="font-semibold mb-2">Vista Previa de Importación</h4>
             <p className="text-sm text-muted-foreground mb-4">
-              Se encontraron {parsedData.length} clientes para importar desde <span className="font-medium">{fileName}</span>. Por favor, verifica los datos.
+              Se importarán {importedClientsPreview.length} clientes. Por favor, verifica los datos.
             </p>
             <ScrollArea className="h-64 border rounded-md">
                  <Table>
@@ -187,20 +245,22 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
                             <TableHead>Nombre</TableHead>
                             <TableHead>Email</TableHead>
                             <TableHead>Teléfono</TableHead>
+                            <TableHead>Fuente</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {parsedData.slice(0, 10).map((client, index) => (
+                        {importedClientsPreview.slice(0, 20).map((client, index) => (
                             <TableRow key={index}>
                                 <TableCell>{client.name}</TableCell>
                                 <TableCell>{client.email}</TableCell>
                                 <TableCell>{client.phone}</TableCell>
+                                <TableCell>{client.source}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
                 </Table>
             </ScrollArea>
-            {parsedData.length > 10 && <p className="text-xs text-center text-muted-foreground mt-2">Mostrando los primeros 10 de {parsedData.length} registros.</p>}
+            {importedClientsPreview.length > 20 && <p className="text-xs text-center text-muted-foreground mt-2">Mostrando los primeros 20 de {importedClientsPreview.length} registros.</p>}
           </div>
         )}
         
@@ -213,16 +273,34 @@ export function ClientImportDialog({ children, open, onOpenChange }: ClientImpor
              </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="pt-4">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isImporting}>
             Cancelar
           </Button>
-          <Button type="button" onClick={handleImport} disabled={parsedData.length === 0 || isImporting}>
-            <CheckCircle className="mr-2 h-4 w-4" />
-            Confirmar e Importar {parsedData.length > 0 ? `(${parsedData.length})` : ''}
-          </Button>
+
+           {step > 1 && step < 3 && (
+                <Button type="button" variant="outline" onClick={() => setStep(step - 1)}>
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Volver
+                </Button>
+           )}
+
+           {step === 2 && (
+             <Button type="button" onClick={handleMappingSubmit}>
+                Previsualizar Datos <ArrowRight className="ml-2 h-4 w-4" />
+             </Button>
+           )}
+          
+          {step === 3 && (
+            <Button type="button" onClick={handleImport} disabled={importedClientsPreview.length === 0 || isImporting}>
+              <CheckCircle className="mr-2 h-4 w-4" />
+              Confirmar e Importar {importedClientsPreview.length > 0 ? `(${importedClientsPreview.length})` : ''}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
+    
