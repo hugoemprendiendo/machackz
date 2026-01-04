@@ -38,6 +38,7 @@ export default function NewSalePage() {
   
   const form = useForm<SaleFormValues>({
     resolver: zodResolver(saleSchema),
+    defaultValues: { customerId: '' },
   });
 
   const onClientCreated = (newClient: Client) => {
@@ -55,31 +56,30 @@ export default function NewSalePage() {
     return clients.find(c => c.id === selectedClientId);
   }, [clients, selectedClientId]);
 
-  React.useEffect(() => {
-    if (selectedClientId) {
-      const handleCreateDraft = async () => {
-        setIsCreating(true);
-        try {
-          const newSale = await createDraftSale(selectedClientId);
-          if (newSale) {
-            toast({
-              title: "Borrador de Venta Creado",
-              description: `Iniciando venta para ${selectedClient?.name}.`,
-            });
-            router.replace(`/sales/${newSale.id}`);
-          }
-        } catch (error) {
-          toast({
-            variant: "destructive",
-            title: "Error",
-            description: "No se pudo crear el borrador de la venta.",
-          });
-          setIsCreating(false);
-        }
-      };
-      handleCreateDraft();
+  const handleCreateDraft = async () => {
+    if (!selectedClientId) {
+      form.trigger('customerId');
+      return;
     }
-  }, [selectedClientId, createDraftSale, router, toast, selectedClient?.name]);
+    setIsCreating(true);
+    try {
+      const newSale = await createDraftSale(selectedClientId);
+      if (newSale) {
+        toast({
+          title: "Borrador de Venta Creado",
+          description: `Iniciando venta para ${selectedClient?.name}.`,
+        });
+        router.push(`/sales/${newSale.id}`);
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo crear el borrador de la venta.",
+      });
+      setIsCreating(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-8">
@@ -93,17 +93,12 @@ export default function NewSalePage() {
             </h1>
         </div>
         <Card className="mx-auto w-full max-w-2xl">
-            <CardHeader>
-                <CardTitle>Paso 1: Selecciona un Cliente</CardTitle>
-                <CardDescription>Para comenzar, elige un cliente existente o crea uno nuevo.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                {isCreating ? (
-                    <div className="flex flex-col items-center justify-center gap-2 p-8 text-muted-foreground">
-                        <Loader2 className="h-8 w-8 animate-spin" />
-                        <p>Creando borrador de venta...</p>
-                    </div>
-                ) : (
+            <form onSubmit={(e) => { e.preventDefault(); handleCreateDraft(); }}>
+                <CardHeader>
+                    <CardTitle>Paso 1: Selecciona un Cliente</CardTitle>
+                    <CardDescription>Para comenzar, elige un cliente existente o crea uno nuevo.</CardDescription>
+                </CardHeader>
+                <CardContent>
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <Label>Cliente</Label>
@@ -134,9 +129,18 @@ export default function NewSalePage() {
                             </Button>
                         </NewClientDialog>
                     </div>
-                )}
-            </CardContent>
+                </CardContent>
+                <CardFooter>
+                    <Button type="submit" disabled={isCreating} className="ml-auto">
+                        {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        {isCreating ? 'Creando borrador...' : 'Continuar'}
+                    </Button>
+                </CardFooter>
+            </form>
         </Card>
     </div>
   );
 }
+
+
+    
