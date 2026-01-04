@@ -235,7 +235,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     const allAffectedItemIds = new Set<string>();
     
-    // Use a single write batch for all operations in this entry.
     const batch = writeBatch(firestore);
     
     const stockEntryRef = doc(collection(firestore, 'stockEntries'));
@@ -256,7 +255,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     await batch.commit();
     
-    // Manually trigger a refresh of stock lots for affected items
     const newStockLots = { ...stockLots };
     for (const itemId of Array.from(allAffectedItemIds)) {
         const lotsRef = collection(firestore, `inventory/${itemId}/stockLots`);
@@ -352,7 +350,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
     try {
       await runTransaction(firestore, async (transaction) => {
-        // 1. Consume stock and prepare sale parts within the transaction
         const finalSaleParts: OrderPart[] = [];
   
         for (const saleItem of saleData.items) {
@@ -390,7 +387,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
         }
   
-        // 2. Create the final sale document
         const { subtotal, taxTotal, total } = finalSaleParts.reduce((acc, part) => {
           const partSubtotal = part.unitPrice * part.quantity;
           const partTax = partSubtotal * (part.taxRate / 100);
@@ -411,14 +407,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         transaction.set(newSaleRef, { ...finalSale, id: newSaleRef.id });
       });
   
-      // 3. Manually trigger local state update after successful transaction
       const affectedItemIds = saleData.items.map(item => item.itemId);
       const newStockLots = { ...stockLots };
       for (const itemId of affectedItemIds) {
-        const lotsRef = collection(firestore, `inventory/${itemId}/stockLots`);
-        const q = query(lotsRef, where("quantity", ">", 0), orderBy("createdAt", "asc"));
-        const querySnapshot = await getDocs(q);
-        newStockLots[itemId] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StockLot));
+        const product = inventory.find(p => p.id === itemId);
+        if(product && !product.isService) {
+          const lotsRef = collection(firestore, `inventory/${itemId}/stockLots`);
+          const q = query(lotsRef, where("quantity", ">", 0), orderBy("createdAt", "asc"));
+          const querySnapshot = await getDocs(q);
+          newStockLots[itemId] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StockLot));
+        }
       }
       setStockLots(newStockLots);
   
@@ -429,7 +427,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         title: "Error al registrar la venta",
         description: e.message,
       });
-      throw e; // Re-throw to inform the caller
+      throw e; 
     }
   }, [firestore, inventory, stockLots, toast]);
 

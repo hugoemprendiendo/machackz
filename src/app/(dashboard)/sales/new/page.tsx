@@ -204,18 +204,7 @@ export default function NewSalePage() {
       customerName: client.name,
       createdAt: data.createdAt.toISOString(),
       notes: data.notes,
-      items: data.items.map(item => {
-        const product = inventory.find(p => p.id === item.itemId)!;
-        return {
-            itemId: product.id,
-            name: product.name,
-            quantity: item.quantity,
-            unitPrice: product.sellingPrice,
-            unitCost: product.costPrice,
-            taxRate: product.taxRate,
-            lotId: 'SALE', // For direct sales, we can use a generic marker
-        }
-      })
+      items: data.items,
     });
 
     toast({
