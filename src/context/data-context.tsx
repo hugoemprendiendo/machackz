@@ -352,29 +352,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
     try {
       await runTransaction(firestore, async (transaction) => {
+        // 1. Generate the Sale ID first
         const newSaleRef = doc(collection(firestore, 'sales'));
-  
         const finalSaleParts: OrderPart[] = [];
-        
-        const saleItemsWithDetails = saleData.items.map(item => {
-            const product = inventory.find(p => p.id === item.itemId);
-            if (!product) throw new Error(`Producto con ID ${item.itemId} no encontrado.`);
-            return { ...item, product };
-        });
+  
+        // 2. Iterate through items to consume stock
+        for (const saleItem of saleData.items) {
+          const productRef = doc(firestore, 'inventory', saleItem.itemId);
+          const productDoc = await transaction.get(productRef);
 
-        for (const saleItem of saleItemsWithDetails) {
-            const product = saleItem.product;
-            allAffectedItemIds.add(product.id);
+          if (!productDoc.exists()) {
+            throw new Error(`Producto con ID ${saleItem.itemId} no encontrado.`);
+          }
+          const product = productDoc.data() as InventoryItem;
 
-            if (product.isService) {
-                finalSaleParts.push({
-                    itemId: product.id, name: product.name, quantity: saleItem.quantity,
-                    unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: 'SERVICE',
-                });
-                continue;
-            }
+          allAffectedItemIds.add(productDoc.id);
 
-          const lotsQuery = query(collection(firestore, `inventory/${product.id}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
+          if (product.isService) {
+              finalSaleParts.push({
+                  itemId: productDoc.id, name: product.name, quantity: saleItem.quantity,
+                  unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: 'SERVICE',
+              });
+              continue;
+          }
+
+          // Read lots inside the transaction
+          const lotsQuery = query(collection(firestore, `inventory/${saleItem.itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
           const lotsSnapshot = await transaction.get(lotsQuery);
   
           let quantityNeeded = saleItem.quantity;
@@ -388,7 +391,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const consume = Math.min(quantityNeeded, lotData.quantity);
   
             finalSaleParts.push({
-              itemId: product.id, name: product.name, quantity: consume,
+              itemId: productDoc.id, name: product.name, quantity: consume,
               unitPrice: product.sellingPrice, unitCost: lotData.costPrice, taxRate: product.taxRate, lotId: lotDoc.id,
             });
   
@@ -414,9 +417,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           total,
         };
         
+        // 3. Set the sale document at the end
         transaction.set(newSaleRef, { ...finalSale, id: newSaleRef.id });
       });
   
+      // Manually trigger a refresh of the affected lots
       const newStockLots = { ...stockLots };
       for (const itemId of Array.from(allAffectedItemIds)) {
           const lotsRef = collection(firestore, `inventory/${itemId}/stockLots`);
@@ -435,7 +440,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
       throw e; 
     }
-  }, [firestore, inventory, stockLots, toast]);
+  }, [firestore, stockLots, toast]);
 
   const addMultiplePartsToOrder = useCallback(async (orderId: string, items: { itemId: string; quantity: number }[]) => {
     if (!firestore) return;
@@ -770,4 +775,5 @@ export const useDataContext = () => {
   }
   return context;
 };
+
 
