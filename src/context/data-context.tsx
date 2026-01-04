@@ -347,9 +347,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'total' | 'subtotal' | 'taxTotal' | 'items'> & { items: { itemId: string; quantity: number }[] }) => {
     if (!firestore) throw new Error("Firestore not initialized");
-
-    const allAffectedItemIds = new Set<string>();
-
+  
     try {
         await runTransaction(firestore, async (transaction) => {
             const newSaleRef = doc(collection(firestore, 'sales'));
@@ -357,6 +355,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             
             for (const saleItem of saleData.items) {
                 const { itemId, quantity } = saleItem;
+
                 if (!itemId) {
                     throw new Error("Se encontró un item sin ID en la venta.");
                 }
@@ -368,36 +367,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     throw new Error(`Producto con ID ${itemId} no encontrado en la base de datos.`);
                 }
                 const product = productDoc.data() as InventoryItem;
-                allAffectedItemIds.add(productDoc.id);
 
                 if (product.isService) {
                     finalSaleParts.push({
                         itemId: productDoc.id, name: product.name, quantity: quantity,
                         unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: 'SERVICE',
                     });
-                    continue;
-                }
+                } else {
+                    const lotsQuery = query(collection(firestore, `inventory/${itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
+                    const lotsSnapshot = await transaction.get(lotsQuery);
 
-                const lotsQuery = query(collection(firestore, `inventory/${itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
-                const lotsSnapshot = await transaction.get(lotsQuery);
+                    let quantityNeeded = quantity;
+                    if (lotsSnapshot.empty || lotsSnapshot.docs.reduce((sum, d) => sum + d.data().quantity, 0) < quantityNeeded) {
+                        throw new Error(`Stock insuficiente para ${product.name}.`);
+                    }
 
-                let quantityNeeded = quantity;
-                if (lotsSnapshot.empty || lotsSnapshot.docs.reduce((sum, doc) => sum + doc.data().quantity, 0) < quantityNeeded) {
-                    throw new Error(`Stock insuficiente para ${product.name}.`);
-                }
+                    for (const lotDoc of lotsSnapshot.docs) {
+                        if (quantityNeeded <= 0) break;
+                        const lotData = lotDoc.data() as StockLot;
+                        const consume = Math.min(quantityNeeded, lotData.quantity);
 
-                for (const lotDoc of lotsSnapshot.docs) {
-                    if (quantityNeeded <= 0) break;
-                    const lotData = lotDoc.data() as StockLot;
-                    const consume = Math.min(quantityNeeded, lotData.quantity);
+                        finalSaleParts.push({
+                            itemId: productDoc.id, name: product.name, quantity: consume,
+                            unitPrice: product.sellingPrice, unitCost: lotData.costPrice, taxRate: product.taxRate, lotId: lotDoc.id,
+                        });
 
-                    finalSaleParts.push({
-                        itemId: productDoc.id, name: product.name, quantity: consume,
-                        unitPrice: product.sellingPrice, unitCost: lotData.costPrice, taxRate: product.taxRate, lotId: lotDoc.id,
-                    });
-
-                    transaction.update(lotDoc.ref, { quantity: lotData.quantity - consume });
-                    quantityNeeded -= consume;
+                        transaction.update(lotDoc.ref, { quantity: lotData.quantity - consume });
+                        quantityNeeded -= consume;
+                    }
                 }
             }
 
@@ -424,15 +421,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             transaction.set(newSaleRef, { ...finalSale, id: newSaleRef.id });
         });
 
-        const newStockLots = { ...stockLots };
-        for (const itemId of Array.from(allAffectedItemIds)) {
-            const lotsRef = collection(firestore, `inventory/${itemId}/stockLots`);
-            const q = query(lotsRef, where("quantity", ">", 0), orderBy("createdAt", "asc"));
-            const querySnapshot = await getDocs(q);
-            newStockLots[itemId] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StockLot));
-        }
-        setStockLots(newStockLots);
-
     } catch (e: any) {
         console.error("Sale transaction failed:", e);
         toast({
@@ -442,7 +430,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
         throw e;
     }
-}, [firestore, stockLots, toast]);
+}, [firestore, toast]);
 
   const addMultiplePartsToOrder = useCallback(async (orderId: string, items: { itemId: string; quantity: number }[]) => {
     if (!firestore) return;
@@ -777,3 +765,6 @@ export const useDataContext = () => {
   }
   return context;
 };
+
+
+    
