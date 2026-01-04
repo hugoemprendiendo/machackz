@@ -27,8 +27,12 @@ function DashboardLayoutContent({
   }, [user, isUserLoading, router]);
 
 
-  if (isDataLoading || isUserLoading || !user) {
+  if (isDataLoading || isUserLoading) {
     return <DashboardLayoutSkeleton />;
+  }
+  
+  if (!user) {
+     return <DashboardLayoutSkeleton />;
   }
 
   return (
@@ -55,3 +59,5 @@ export default function DashboardLayout({
     </DataProvider>
   );
 }
+
+    

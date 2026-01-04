@@ -35,7 +35,7 @@ import { Sale, SaleStatus, Client, OrderPart, InventoryItem } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from "@/components/ui/alert-dialog";
-import { AddPartDialog } from "@/components/sales/add-item-to-sale-dialog";
+import { AddItemToSaleDialog } from "@/components/sales/add-item-to-sale-dialog";
 
 const statusColors: Record<SaleStatus, string> = {
     'Borrador': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
@@ -47,10 +47,12 @@ export default function SaleDetailPage() {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
-  const { sales, clients, settings, removeItemFromSale, updateSaleStatus } = useDataContext();
+  const { sales, clients, settings, removeItemFromSale, updateSaleStatus, addMultiplePartsToOrder } = useDataContext();
   
   const printRef = React.useRef<HTMLDivElement>(null);
   const [partToRemove, setPartToRemove] = React.useState<OrderPart | null>(null);
+  const [isItemDialogOpen, setItemDialogOpen] = React.useState(false);
+
 
   const sale = React.useMemo(() => sales.find((s) => s.id === params.id), [sales, params.id]);
   const client = React.useMemo(() => clients.find((c) => c.id === sale?.customerId), [clients, sale]);
@@ -104,6 +106,12 @@ export default function SaleDetailPage() {
     }
   }
   
+  const onAddItem = (item: Omit<OrderPart, 'name'> & { name: string }) => {
+    if (!sale) return;
+    addMultiplePartsToOrder(sale.id, [{ itemId: item.itemId, quantity: item.quantity }]);
+  };
+
+
   if (!sale || !client) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center">
@@ -163,7 +171,9 @@ export default function SaleDetailPage() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Items de la Venta</CardTitle>
                 {sale.status === 'Borrador' && (
-                    <AddPartDialog saleId={sale.id}/>
+                    <AddItemToSaleDialog open={isItemDialogOpen} onOpenChange={setItemDialogOpen} onAddItem={onAddItem}>
+                        <Button size="sm" variant="outline"><PlusCircle className="mr-2 h-4 w-4"/>Añadir Item</Button>
+                    </AddItemToSaleDialog>
                 )}
               </CardHeader>
               <CardContent>
@@ -246,3 +256,5 @@ export default function SaleDetailPage() {
     </>
   );
 }
+
+    

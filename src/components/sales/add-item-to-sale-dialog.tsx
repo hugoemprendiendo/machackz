@@ -17,29 +17,32 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useDataContext } from '@/context/data-context';
-import { InventoryItem } from '@/lib/types';
+import { InventoryItem, OrderPart } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
-interface AddPartDialogProps {
-  saleId: string;
+interface AddItemToSaleDialogProps {
+  children: React.ReactNode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAddItem: (item: Omit<OrderPart, 'name'> & { name: string }) => void;
 }
 
-export function AddPartDialog({ saleId }: AddPartDialogProps) {
-    const { addMultiplePartsToOrder } = useDataContext(); // Note: This function is for Orders, we need one for sales.
+export function AddItemToSaleDialog({ open, onOpenChange, onAddItem, children }: AddItemToSaleDialogProps) {
+    const { inventory } = useDataContext();
     const { toast } = useToast();
-    const [isOpen, setIsOpen] = useState(false);
+    
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
     const [quantity, setQuantity] = useState(1);
+    const [price, setPrice] = useState(0);
     const [isAdding, setIsAdding] = useState(false);
-    const [inventory, setInventory] = useState<InventoryItem[]>([]);
-    
-    // This is a temporary workaround. Inventory should come from context.
+
     useEffect(() => {
-        const { inventory: contextInventory } = useDataContext();
-        setInventory(contextInventory);
-    }, [isOpen]);
+        if (selectedItem) {
+            setPrice(selectedItem.sellingPrice);
+        }
+    }, [selectedItem]);
 
     const filteredInventory = useMemo(() => {
         if (!searchQuery) return [];
@@ -64,14 +67,18 @@ export function AddPartDialog({ saleId }: AddPartDialogProps) {
             return;
         }
 
-        try {
-            await addMultiplePartsToOrder(saleId, [{ itemId: selectedItem.id, quantity: quantity }]);
-            handleOpenChange(false);
-        } catch (error) {
-            console.error("Error adding part to sale:", error);
-        } finally {
-            setIsAdding(false);
-        }
+        onAddItem({
+            itemId: selectedItem.id,
+            name: selectedItem.name,
+            quantity: quantity,
+            unitPrice: price,
+            unitCost: selectedItem.costPrice,
+            taxRate: selectedItem.taxRate,
+            lotId: selectedItem.isService ? 'SERVICE' : '' // Lot ID will be determined in the backend transaction
+        });
+        
+        setIsAdding(false);
+        handleOpenChange(false);
     };
     
     const handleOpenChange = (open: boolean) => {
@@ -79,14 +86,15 @@ export function AddPartDialog({ saleId }: AddPartDialogProps) {
             setSearchQuery("");
             setSelectedItem(null);
             setQuantity(1);
+            setPrice(0);
         }
-        setIsOpen(open);
+        onOpenChange(open);
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
-                <Button size="sm" variant="outline">Añadir Item</Button>
+                {children}
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
@@ -131,9 +139,9 @@ export function AddPartDialog({ saleId }: AddPartDialogProps) {
                         </div>
                     </ScrollArea>
                     {selectedItem && (
-                        <div className="flex items-center gap-4 p-2 border rounded-lg bg-muted/50">
-                             <div className="flex-1">
-                                <Label htmlFor="quantity">Cantidad para <span className="font-semibold">{selectedItem.name}</span></Label>
+                        <div className="grid grid-cols-2 gap-4 p-2 border rounded-lg bg-muted/50">
+                             <div>
+                                <Label htmlFor="quantity">Cantidad</Label>
                                 <Input
                                     id="quantity"
                                     type="number"
@@ -144,16 +152,29 @@ export function AddPartDialog({ saleId }: AddPartDialogProps) {
                                     max={selectedItem.isService ? undefined : selectedItem.stock}
                                 />
                             </div>
-                            <Button onClick={handleAddItem} disabled={isAdding} className="mt-5">
-                                {isAdding ? <Loader2 className="animate-spin"/> : 'Añadir'}
-                            </Button>
+                            <div>
+                                <Label htmlFor="price">Precio Unit.</Label>
+                                <Input
+                                    id="price"
+                                    type="number"
+                                    step="0.01"
+                                    value={price}
+                                    onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+                                    className="mt-1"
+                                />
+                            </div>
                         </div>
                     )}
                 </div>
                 <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isAdding}>Cerrar</Button>
+                     <Button onClick={handleAddItem} disabled={isAdding || !selectedItem}>
+                        {isAdding ? <Loader2 className="animate-spin"/> : 'Añadir'}
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     )
 }
+
+    
