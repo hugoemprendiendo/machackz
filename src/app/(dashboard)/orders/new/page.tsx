@@ -31,10 +31,10 @@ import { NewClientDialog } from "@/components/clients/new-client-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Combobox } from "@/components/ui/combobox";
 
 const orderFormSchema = z.object({
-  customerId: z.string({ required_error: "Por favor selecciona un cliente." }),
+  customerId: z.string({ required_error: "Por favor selecciona un cliente." }).min(1, "Por favor selecciona un cliente."),
   createdAt: z.date(),
   deviceType: z.string().min(2, "El tipo de dispositivo es requerido."),
   brand: z.string().min(2, "La marca es requerida."),
@@ -174,7 +174,7 @@ export default function NewOrderPage() {
   }, [orderToPrint, clientToPrint]);
 
   const onClientCreated = (newClient: Client) => {
-    form.setValue('customerId', newClient.id);
+    form.setValue('customerId', newClient.id, { shouldValidate: true });
     setClientDialogOpen(false);
   };
 
@@ -225,6 +225,11 @@ export default function NewOrderPage() {
     router.push("/orders");
   };
   
+  const clientOptions = React.useMemo(() => clients.map(client => ({
+      value: client.id,
+      label: client.name,
+  })), [clients]);
+
   return (
     <div className="flex flex-col gap-8">
         <div className="flex items-center gap-4">
@@ -390,16 +395,14 @@ export default function NewOrderPage() {
                             control={form.control}
                             name="customerId"
                             render={({ field }) => (
-                               <Select onValueChange={field.onChange} value={field.value}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Seleccionar cliente..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {clients.map(client => (
-                                            <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                               </Select>
+                               <Combobox 
+                                 options={clientOptions}
+                                 value={field.value}
+                                 onChange={field.onChange}
+                                 placeholder="Seleccionar cliente..."
+                                 searchPlaceholder="Buscar cliente..."
+                                 noResultsText="No se encontró el cliente."
+                               />
                             )}
                         />
                         {form.formState.errors.customerId && <p className="text-sm text-destructive mt-2">{form.formState.errors.customerId.message}</p>}
@@ -463,3 +466,5 @@ export default function NewOrderPage() {
     </div>
   );
 }
+
+    
