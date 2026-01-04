@@ -233,32 +233,28 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addStockEntry = useCallback(async (entry: Omit<StockEntry, 'id'>) => {
     if (!firestore) return;
     
-    const chunks: StockEntryItem[][] = [];
-    for (let i = 0; i < entry.items.length; i += 498) {
-        chunks.push(entry.items.slice(i, i + 498));
-    }
-
     const allAffectedItemIds = new Set<string>();
+    
+    // Use a single write batch for all operations in this entry.
+    const batch = writeBatch(firestore);
+    
+    const stockEntryRef = doc(collection(firestore, 'stockEntries'));
+    batch.set(stockEntryRef, {...entry, id: stockEntryRef.id});
 
-    for (const chunk of chunks) {
-        const batch = writeBatch(firestore);
-        const stockEntryRef = doc(collection(firestore, 'stockEntries'));
-        batch.set(stockEntryRef, {...entry, id: stockEntryRef.id, items: chunk});
-
-        for (const item of chunk) {
-            allAffectedItemIds.add(item.itemId);
-            const lotRef = doc(collection(firestore, `inventory/${item.itemId}/stockLots`));
-            const newLot: Omit<StockLot, 'id'> = {
-                purchaseId: stockEntryRef.id,
-                purchaseDate: entry.date,
-                createdAt: serverTimestamp(),
-                quantity: item.quantity,
-                costPrice: item.unitCost,
-            };
-            batch.set(lotRef, newLot);
-        }
-        await batch.commit();
+    for (const item of entry.items) {
+        allAffectedItemIds.add(item.itemId);
+        const lotRef = doc(collection(firestore, `inventory/${item.itemId}/stockLots`));
+        const newLot: Omit<StockLot, 'id'> = {
+            purchaseId: stockEntryRef.id,
+            purchaseDate: entry.date,
+            createdAt: serverTimestamp(),
+            quantity: item.quantity,
+            costPrice: item.unitCost,
+        };
+        batch.set(lotRef, newLot);
     }
+    
+    await batch.commit();
     
     // Manually trigger a refresh of stock lots for affected items
     const newStockLots = { ...stockLots };
@@ -366,19 +362,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const finalSaleParts: OrderPart[] = [];
   
         for (const saleItem of saleItemsWithDetails) {
-          const { product, ...item } = saleItem;
+          const { product } = saleItem;
           if (product.isService) {
             finalSaleParts.push({
-              itemId: product.id, name: product.name, quantity: item.quantity,
+              itemId: product.id, name: product.name, quantity: saleItem.quantity,
               unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: 'SERVICE',
             });
             continue;
           }
   
-          const lotsQuery = query(collection(firestore, `inventory/${item.itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
+          const lotsQuery = query(collection(firestore, `inventory/${saleItem.itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
           const lotsSnapshot = await transaction.get(lotsQuery);
   
-          let quantityNeeded = item.quantity;
+          let quantityNeeded = saleItem.quantity;
           if (lotsSnapshot.empty || lotsSnapshot.docs.reduce((sum, doc) => sum + doc.data().quantity, 0) < quantityNeeded) {
             throw new Error(`Stock insuficiente para ${product.name}.`);
           }
