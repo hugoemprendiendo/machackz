@@ -348,6 +348,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'createdAt' | 'status' | 'total' | 'subtotal' | 'taxTotal' | 'items'> & { items: { itemId: string; quantity: number, name: string, unitPrice: number, taxRate: number }[] }) => {
     if (!firestore) throw new Error("Firestore not initialized");
+
+    const allAffectedItemIds = new Set<string>();
     
     try {
       await runTransaction(firestore, async (transaction) => {
@@ -375,9 +377,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
             continue;
           }
+
+          allAffectedItemIds.add(saleItem.itemId);
   
           const lotsQuery = query(collection(firestore, `inventory/${saleItem.itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
-          const lotsSnapshot = await getDocs(lotsQuery); // Execute query outside transaction to get refs
+          const lotsSnapshot = await getDocs(lotsQuery); 
           
           let quantityNeeded = saleItem.quantity;
           const totalStockInLots = lotsSnapshot.docs.reduce((sum, d) => sum + d.data().quantity, 0);
@@ -427,13 +431,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
         transaction.set(newSaleRef, { ...finalSale, id: newSaleRef.id });
       });
+      
+      const newStockLots = { ...stockLots };
+      for (const itemId of Array.from(allAffectedItemIds)) {
+          const lotsRef = collection(firestore, `inventory/${itemId}/stockLots`);
+          const q = query(lotsRef, where("quantity", ">", 0), orderBy("createdAt", "asc"));
+          const querySnapshot = await getDocs(q);
+          newStockLots[itemId] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StockLot));
+      }
+      setStockLots(newStockLots);
   
     } catch (e: any) {
       console.error("Sale transaction failed:", e);
-      toast({ variant: "destructive", title: "Error al registrar la venta", description: e.message });
+      toast({
+        variant: "destructive",
+        title: "Error al registrar la venta",
+        description: e.message,
+      });
       throw e;
     }
-  }, [firestore, toast]);
+  }, [firestore, toast, stockLots]);
   
   const updateSaleStatus = useCallback(async (saleId: string, status: SaleStatus) => {
       updateDocumentNonBlocking(doc(firestore, 'sales', saleId), { status });
@@ -834,5 +851,7 @@ export const useDataContext = () => {
   }
   return context;
 };
+
+    
 
     
