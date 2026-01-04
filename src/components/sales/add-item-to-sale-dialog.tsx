@@ -11,30 +11,27 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useToast } from '@/hooks/use-toast';
 import { useDataContext } from '@/context/data-context';
 import { InventoryItem } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 interface AddItemToSaleDialogProps {
-  saleId: string;
-  children: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onAddItem: (item: InventoryItem, quantity: number) => void;
 }
 
-export function AddItemToSaleDialog({ saleId, children, open, onOpenChange }: AddItemToSaleDialogProps) {
-    const { inventory, addItemToSale } = useDataContext();
+export function AddItemToSaleDialog({ open, onOpenChange, onAddItem }: AddItemToSaleDialogProps) {
+    const { inventory } = useDataContext();
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
     const [quantity, setQuantity] = useState(1);
-    const [isAdding, setIsAdding] = useState(false);
 
     const filteredInventory = useMemo(() => {
         if (!searchQuery) return [];
@@ -45,18 +42,20 @@ export function AddItemToSaleDialog({ saleId, children, open, onOpenChange }: Ad
         );
     }, [inventory, searchQuery]);
 
-    const handleAddItem = async () => {
+    const handleAddItem = () => {
         if (!selectedItem) return;
-        setIsAdding(true);
         
-        try {
-            await addItemToSale(saleId, selectedItem.id, quantity);
-            handleDialogChange(false); // Close dialog on success
-        } catch (error) {
-            // Error is already toasted in the context
-        } finally {
-            setIsAdding(false);
+        if (!selectedItem.isService && selectedItem.stock < quantity) {
+            toast({
+                variant: 'destructive',
+                title: 'Stock Insuficiente',
+                description: `No hay suficiente stock para ${selectedItem.name}. Necesitas ${quantity} y solo hay ${selectedItem.stock}.`
+            });
+            return;
         }
+
+        onAddItem(selectedItem, quantity);
+        handleDialogChange(false);
     };
     
     const handleDialogChange = (isOpen: boolean) => {
@@ -70,7 +69,6 @@ export function AddItemToSaleDialog({ saleId, children, open, onOpenChange }: Ad
 
     return (
         <Dialog open={open} onOpenChange={handleDialogChange}>
-            <DialogTrigger asChild>{children}</DialogTrigger>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>Añadir Item a la Venta</DialogTitle>
@@ -84,7 +82,6 @@ export function AddItemToSaleDialog({ saleId, children, open, onOpenChange }: Ad
                             setSearchQuery(e.target.value);
                             setSelectedItem(null);
                         }}
-                        disabled={isAdding}
                     />
                     <ScrollArea className="h-64 border rounded-md">
                         <div className="p-2">
@@ -127,18 +124,16 @@ export function AddItemToSaleDialog({ saleId, children, open, onOpenChange }: Ad
                                     max={selectedItem.isService ? undefined : selectedItem.stock}
                                 />
                             </div>
-                            <Button onClick={handleAddItem} disabled={isAdding || !selectedItem} className="mt-5">
-                                {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Añadir'}
+                            <Button onClick={handleAddItem} disabled={!selectedItem} className="mt-5">
+                                Añadir
                             </Button>
                         </div>
                     )}
                 </div>
                 <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => handleDialogChange(false)} disabled={isAdding}>Cerrar</Button>
+                    <Button type="button" variant="outline" onClick={() => handleDialogChange(false)}>Cerrar</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     )
 }
-
-    

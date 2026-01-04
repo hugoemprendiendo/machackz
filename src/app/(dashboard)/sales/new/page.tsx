@@ -182,9 +182,7 @@ export default function NewSalePage() {
                         <CardTitle>Items de la Venta</CardTitle>
                         <CardDescription>Añade los productos y servicios a vender.</CardDescription>
                     </div>
-                    <AddItemToSaleDialog open={isItemDialogOpen} onOpenChange={setItemDialogOpen} onAddItem={onAddItem}>
-                        <Button type="button" variant="outline"><PlusCircle className="mr-2 h-4 w-4" />Añadir Item</Button>
-                    </AddItemToSaleDialog>
+                    <Button type="button" variant="outline" onClick={() => setItemDialogOpen(true)}><PlusCircle className="mr-2 h-4 w-4" />Añadir Item</Button>
                 </CardHeader>
                 <CardContent>
                     <Table>
@@ -247,8 +245,11 @@ export default function NewSalePage() {
             </Card>
         </form>
     </div>
+    <AddItemToSaleDialog 
+        open={isItemDialogOpen} 
+        onOpenChange={setItemDialogOpen} 
+        onAddItem={onAddItem}
+    />
     </>
   );
 }
-
-    
