@@ -375,39 +375,54 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toast({ variant: 'destructive', title: 'Error', description: 'Información del producto inválida.' });
         return;
     }
+    
+    const product = inventory.find(p => p.id === itemId);
+    if (!product) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Producto no encontrado.' });
+        return;
+    }
 
     try {
-        await runTransaction(firestore, async (transaction) => {
+        if (product.isService) {
             const saleRef = doc(firestore, 'sales', saleId);
-            const productRef = doc(firestore, 'inventory', itemId);
-
-            const [saleDoc, productDoc] = await Promise.all([
-                transaction.get(saleRef),
-                transaction.get(productRef)
-            ]);
-            
+            const saleDoc = await getDoc(saleRef);
             if (!saleDoc.exists()) throw new Error("La venta no existe.");
-            if (!productDoc.exists()) throw new Error("El producto no existe.");
 
-            const product = productDoc.data() as InventoryItem;
-            let newParts: OrderPart[] = [];
-            
-            if (product.isService) {
-                newParts.push({
-                    itemId: product.id, name: product.name, quantity,
-                    unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: 'SERVICE'
-                });
-            } else {
+            const newPart: OrderPart = {
+                itemId: product.id, name: product.name, quantity,
+                unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: 'SERVICE'
+            };
+
+            const currentSale = saleDoc.data() as Sale;
+            const updatedItems = [...currentSale.items, newPart];
+            const { subtotal, taxTotal, total } = updatedItems.reduce((acc, part) => {
+                const partSubtotal = part.unitPrice * part.quantity;
+                const partTax = partSubtotal * (part.taxRate / 100);
+                acc.subtotal += partSubtotal;
+                acc.taxTotal += partTax;
+                acc.total += partSubtotal + partTax;
+                return acc;
+            }, { subtotal: 0, taxTotal: 0, total: 0 });
+
+            await updateDoc(saleRef, { items: updatedItems, subtotal, taxTotal, total });
+
+        } else {
+            await runTransaction(firestore, async (transaction) => {
+                const saleRef = doc(firestore, 'sales', saleId);
+                const saleDoc = await transaction.get(saleRef);
+                if (!saleDoc.exists()) throw new Error("La venta no existe.");
+    
                 const lotsQuery = query(collection(firestore, `inventory/${itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
                 const lotsSnapshot = await transaction.get(lotsQuery);
-
+    
                 let quantityNeeded = quantity;
                 const totalStockInLots = lotsSnapshot.docs.reduce((sum, d) => sum + d.data().quantity, 0);
-
+    
                 if (lotsSnapshot.empty || totalStockInLots < quantityNeeded) {
                     throw new Error(`Stock insuficiente para ${product.name}. Necesitas ${quantity} y solo hay ${totalStockInLots} disponibles.`);
                 }
-
+    
+                const newParts: OrderPart[] = [];
                 for (const lotDoc of lotsSnapshot.docs) {
                     if (quantityNeeded <= 0) break;
                     const lotData = lotDoc.data() as StockLot;
@@ -419,29 +434,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     transaction.update(lotDoc.ref, { quantity: lotData.quantity - consume });
                     quantityNeeded -= consume;
                 }
-            }
-
-            const currentSale = saleDoc.data() as Sale;
-            const updatedItems = [...currentSale.items, ...newParts];
-
-            const { subtotal, taxTotal, total } = updatedItems.reduce((acc, part) => {
-                const partSubtotal = part.unitPrice * part.quantity;
-                const partTax = partSubtotal * (part.taxRate / 100);
-                acc.subtotal += partSubtotal;
-                acc.taxTotal += partTax;
-                acc.total += partSubtotal + partTax;
-                return acc;
-            }, { subtotal: 0, taxTotal: 0, total: 0 });
-
-            transaction.update(saleRef, { items: updatedItems, subtotal, taxTotal, total });
-        });
-        toast({ title: 'Item añadido', description: `${quantity} x ${inventory.find(p=>p.id === itemId)?.name} añadido a la venta.` });
+    
+                const currentSale = saleDoc.data() as Sale;
+                const updatedItems = [...currentSale.items, ...newParts];
+    
+                const { subtotal, taxTotal, total } = updatedItems.reduce((acc, part) => {
+                    const partSubtotal = part.unitPrice * part.quantity;
+                    const partTax = partSubtotal * (part.taxRate / 100);
+                    acc.subtotal += partSubtotal;
+                    acc.taxTotal += partTax;
+                    acc.total += partSubtotal + partTax;
+                    return acc;
+                }, { subtotal: 0, taxTotal: 0, total: 0 });
+    
+                transaction.update(saleRef, { items: updatedItems, subtotal, taxTotal, total });
+            });
+        }
+        toast({ title: 'Item añadido', description: `${quantity} x ${product.name} añadido a la venta.` });
     } catch(e: any) {
         console.error("Failed to add item to sale:", e);
         toast({ variant: 'destructive', title: 'Error al añadir item', description: e.message });
-        throw e;
+        throw e; // Re-throw para que el componente sepa que falló
     }
   }, [firestore, inventory, toast]);
+
 
   const removeItemFromSale = useCallback(async (saleId: string, partToRemove: OrderPart) => {
     if (!firestore) return;
@@ -832,3 +848,5 @@ export const useDataContext = () => {
   }
   return context;
 };
+
+    
