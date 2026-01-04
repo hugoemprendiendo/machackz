@@ -347,9 +347,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'total' | 'subtotal' | 'taxTotal'>) => {
     if (!firestore) throw new Error("Firestore not initialized");
-
+  
     const allAffectedItemIds = new Set<string>();
-
+  
     try {
       await runTransaction(firestore, async (transaction) => {
         const finalSaleParts: OrderPart[] = [];
@@ -364,7 +364,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               itemId: product.id, name: product.name, quantity: saleItem.quantity,
               unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: 'SERVICE',
             });
-            continue;
+            continue; // Skip to next item if it's a service
           }
   
           const lotsQuery = query(collection(firestore, `inventory/${saleItem.itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
