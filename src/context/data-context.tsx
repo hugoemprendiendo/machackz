@@ -350,112 +350,94 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.setItem('settings', JSON.stringify(newSettings));
   }, []);
 
-  const consumeStock = useCallback(async (items: { itemId: string; quantity: number }[]) => {
+  const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'total' | 'subtotal' | 'taxTotal'>) => {
     if (!firestore) throw new Error("Firestore not initialized");
-
-    const updatedLots: Record<string, StockLot[]> = {};
-
-    for (const item of items) {
-        const product = inventory.find(p => p.id === item.itemId);
-        if (!product || product.isService) continue;
-
-        const lotsCollectionRef = collection(firestore, `inventory/${item.itemId}/stockLots`);
-        const lotsQuery = query(lotsCollectionRef, where("quantity", ">", 0), orderBy("createdAt", "asc"));
-
-        try {
-            const lotsSnapshot = await getDocs(lotsQuery);
-            const lotsToConsume: { ref: DocumentReference, consume: number, data: StockLot }[] = [];
-            let quantityNeeded = item.quantity;
-
-            for (const lotDoc of lotsSnapshot.docs) {
-                if (quantityNeeded <= 0) break;
-                const lotData = lotDoc.data() as StockLot;
-                const consume = Math.min(quantityNeeded, lotData.quantity);
-                lotsToConsume.push({ ref: lotDoc.ref, consume, data: lotData });
-                quantityNeeded -= consume;
-            }
-
-            if (quantityNeeded > 0) {
-                throw new Error(`Stock insuficiente para ${product.name}.`);
-            }
-
-            await runTransaction(firestore, async (transaction) => {
-                const currentItemLots: StockLot[] = [];
-                for (const lotToUpdate of lotsToConsume) {
-                    const lotDoc = await transaction.get(lotToUpdate.ref);
-                    if (!lotDoc.exists()) throw new Error(`El lote para ${product.name} ya no existe.`);
-                    const currentLot = lotDoc.data() as StockLot;
-                    const newQuantity = currentLot.quantity - lotToUpdate.consume;
-                    transaction.update(lotToUpdate.ref, { quantity: newQuantity });
-                    if (newQuantity > 0) {
-                        currentItemLots.push({ ...currentLot, quantity: newQuantity });
-                    }
-                }
-                 updatedLots[item.itemId] = currentItemLots;
+  
+    try {
+      await runTransaction(firestore, async (transaction) => {
+        const saleItemsWithDetails = saleData.items.map(item => {
+          const product = inventory.find(p => p.id === item.itemId);
+          if (!product) throw new Error(`Producto con ID ${item.itemId} no encontrado.`);
+          return { ...item, product };
+        });
+  
+        // 1. Consume stock and prepare sale parts within the transaction
+        const finalSaleParts: OrderPart[] = [];
+  
+        for (const { item, product } of saleItemsWithDetails) {
+          if (product.isService) {
+            finalSaleParts.push({
+              itemId: product.id, name: product.name, quantity: item.quantity,
+              unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: 'SERVICE',
             });
-        } catch (e: any) {
-            console.error("Stock consumption transaction failed: ", e);
-            throw e; // Re-throw to be caught by the calling function
+            continue;
+          }
+  
+          const lotsQuery = query(collection(firestore, `inventory/${item.itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
+          const lotsSnapshot = await transaction.get(lotsQuery);
+  
+          let quantityNeeded = item.quantity;
+          if (lotsSnapshot.empty || lotsSnapshot.docs.reduce((sum, doc) => sum + doc.data().quantity, 0) < quantityNeeded) {
+            throw new Error(`Stock insuficiente para ${product.name}.`);
+          }
+  
+          for (const lotDoc of lotsSnapshot.docs) {
+            if (quantityNeeded <= 0) break;
+            const lotData = lotDoc.data() as StockLot;
+            const consume = Math.min(quantityNeeded, lotData.quantity);
+  
+            finalSaleParts.push({
+              itemId: product.id, name: product.name, quantity: consume,
+              unitPrice: product.sellingPrice, unitCost: lotData.costPrice, taxRate: product.taxRate, lotId: lotDoc.id,
+            });
+  
+            transaction.update(lotDoc.ref, { quantity: lotData.quantity - consume });
+            quantityNeeded -= consume;
+          }
         }
-    }
-     // After the transaction, update the local state.
-    setStockLots(prevStockLots => {
-        const newStockLots = { ...prevStockLots };
-        for (const itemId in updatedLots) {
-            // Get the rest of the lots for the item that were not part of the consumption
-             const unaffectedLots = (prevStockLots[itemId] || []).filter(
-                lot => !updatedLots[itemId].some(updatedLot => updatedLot.id === lot.id) && 
-                       !Object.values(updatedLots).flat().find(l => l.id === lot.id) // This logic is imperfect
-             );
-            // This logic is imperfect, a full refetch might be safer on failure.
-            // For now, this just replaces the lots with the updated state.
-            const allItemLots = [...unaffectedLots, ...updatedLots[itemId]].sort((a,b) => a.createdAt.toMillis() - b.createdAt.toMillis());
-            newStockLots[itemId] = allItemLots;
-        }
-        return newStockLots;
-    });
-  }, [firestore, inventory]);
-
-   const addSale = useCallback(async (saleData: Omit<Sale, 'id'| 'total' | 'subtotal' | 'taxTotal'>) => {
-    if (!salesRef || !firestore) throw new Error("Firestore not initialized");
-    
-    const { subtotal, taxTotal, total } = saleData.items.reduce((acc, item) => {
-        const itemSubtotal = item.unitPrice * item.quantity;
-        const itemTax = itemSubtotal * (item.taxRate / 100);
-        acc.subtotal += itemSubtotal;
-        acc.taxTotal += itemTax;
-        acc.total += itemSubtotal + itemTax;
-        return acc;
-    }, { subtotal: 0, taxTotal: 0, total: 0 });
-
-    const finalSale: Omit<Sale, 'id'> = {
-        ...saleData,
-        subtotal,
-        taxTotal,
-        total
-    };
-    
-    // Consume stock first
-    await consumeStock(saleData.items.map(i => ({ itemId: i.itemId, quantity: i.quantity })));
-    
-    // Then add the sale document
-    const salesCollection = collection(firestore, 'sales');
-    const docRef = await addDoc(salesCollection, finalSale);
-    await updateDocumentNonBlocking(docRef, { id: docRef.id });
-
-    // Manually trigger a refresh of stock lots for affected items
-    const affectedItemIds = saleData.items.map(item => item.itemId);
-    const newStockLots = { ...stockLots };
-    for (const itemId of affectedItemIds) {
+  
+        // 2. Create the final sale document
+        const { subtotal, taxTotal, total } = finalSaleParts.reduce((acc, part) => {
+          const partSubtotal = part.unitPrice * part.quantity;
+          const partTax = partSubtotal * (part.taxRate / 100);
+          acc.subtotal += partSubtotal;
+          acc.taxTotal += partTax;
+          acc.total += partSubtotal + partTax;
+          return acc;
+        }, { subtotal: 0, taxTotal: 0, total: 0 });
+  
+        const newSaleRef = doc(collection(firestore, 'sales'));
+        const finalSale: Omit<Sale, 'id'> = {
+          ...saleData,
+          items: finalSaleParts,
+          subtotal,
+          taxTotal,
+          total,
+        };
+        transaction.set(newSaleRef, { ...finalSale, id: newSaleRef.id });
+      });
+  
+      // 3. Manually trigger local state update after successful transaction
+      const affectedItemIds = saleData.items.map(item => item.itemId);
+      const newStockLots = { ...stockLots };
+      for (const itemId of affectedItemIds) {
         const lotsRef = collection(firestore, `inventory/${itemId}/stockLots`);
         const q = query(lotsRef, where("quantity", ">", 0), orderBy("createdAt", "asc"));
         const querySnapshot = await getDocs(q);
         newStockLots[itemId] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StockLot));
+      }
+      setStockLots(newStockLots);
+  
+    } catch (e: any) {
+      console.error("Sale transaction failed:", e);
+      toast({
+        variant: "destructive",
+        title: "Error al registrar la venta",
+        description: e.message,
+      });
+      throw e; // Re-throw to inform the caller
     }
-    setStockLots(newStockLots);
-
-    return { id: docRef.id, ...finalSale };
-  }, [salesRef, firestore, consumeStock, stockLots]);
+  }, [firestore, inventory, stockLots, toast]);
 
   const addMultiplePartsToOrder = useCallback(async (orderId: string, items: { itemId: string; quantity: number }[]) => {
     if (!firestore) return;
@@ -790,7 +772,3 @@ export const useDataContext = () => {
   }
   return context;
 };
-
-    
-
-    
