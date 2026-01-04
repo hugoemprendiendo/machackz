@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from "react";
@@ -22,12 +23,20 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { useDataContext } from "@/context/data-context";
-import { Sale } from "@/lib/types";
+import { Sale, SaleStatus } from "@/lib/types";
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, startOfToday, subDays, parseISO } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DateRange } from "react-day-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Badge } from "@/components/ui/badge";
+
+const statusColors: Record<SaleStatus, string> = {
+    'Borrador': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
+    'Completada': 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
+    'Cancelada': 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
+};
+
 
 const SalesTable = ({ sales }: { sales: Sale[] }) => {
     
@@ -46,6 +55,7 @@ const SalesTable = ({ sales }: { sales: Sale[] }) => {
                 <TableHead>Venta ID</TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead>Fecha Creación</TableHead>
+                <TableHead>Estado</TableHead>
                 <TableHead className="text-right">Total</TableHead>
             </TableRow>
         </TableHeader>
@@ -57,6 +67,11 @@ const SalesTable = ({ sales }: { sales: Sale[] }) => {
                     </TableCell>
                     <TableCell>{sale.customerName}</TableCell>
                     <TableCell>{format(new Date(sale.createdAt), 'dd/MM/yyyy')}</TableCell>
+                     <TableCell>
+                        <Badge className={cn("text-xs font-medium", statusColors[sale.status])} variant="outline">
+                            {sale.status}
+                        </Badge>
+                    </TableCell>
                     <TableCell className="text-right">${sale.total.toFixed(2)}</TableCell>
                 </TableRow>
             ))}

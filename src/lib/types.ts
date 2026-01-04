@@ -61,6 +61,8 @@ export type OrderStatus =
   | 'Entregada / Cerrada'
   | 'Cancelada';
 
+export type SaleStatus = 'Borrador' | 'Completada' | 'Cancelada';
+
 export type OrderPart = {
   itemId: string;
   name: string;
@@ -102,7 +104,8 @@ export type Sale = {
     customerId: string;
     customerName: string;
     createdAt: string;
-    items: OrderPart[]; // Reusing OrderPart as it has the required structure
+    items: OrderPart[];
+    status: SaleStatus;
     total: number;
     subtotal: number;
     taxTotal: number;
