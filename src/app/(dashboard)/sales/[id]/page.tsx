@@ -10,6 +10,7 @@ import {
   PlusCircle,
   Trash2,
   CheckCircle,
+  Loader2,
 } from "lucide-react";
 import {
   Card,
@@ -151,7 +152,7 @@ function AddPartDialog({ saleId }: { saleId: string }) {
                                 />
                             </div>
                             <Button onClick={handleAddItem} disabled={isAdding || !selectedItem} className="mt-5">
-                                {isAdding ? 'Añadiendo...' : 'Añadir'}
+                                {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Añadir'}
                             </Button>
                         </div>
                     )}
