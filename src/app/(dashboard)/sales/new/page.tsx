@@ -184,7 +184,7 @@ export default function NewSalePage() {
         if (!product) return acc;
         
         const itemSubtotal = product.sellingPrice * item.quantity;
-        const itemTax = itemSubtotal * (product.taxRate / 100);
+        const itemTax = product.hasTax ? itemSubtotal * (product.taxRate / 100) : 0;
         
         acc.subtotal += itemSubtotal;
         acc.taxTotal += itemTax;
@@ -413,5 +413,3 @@ export default function NewSalePage() {
     </div>
   );
 }
-
-    
