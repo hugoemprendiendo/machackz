@@ -37,7 +37,7 @@ interface DataContextProps {
   updateOrderStatus: (orderId: string, status: OrderStatus, closedAt?: Date) => Promise<void>;
   updateOrderDetails: (orderId: string, details: { problemDescription?: string; diagnosis?: string; }) => Promise<void>;
   removePartFromOrder: (orderId: string, partToRemove: OrderPart) => Promise<void>;
-  createDraftSale: (customerId: string) => Promise<string>;
+  addSale: (saleData: Omit<Sale, 'id' | 'status' | 'total' | 'subtotal' | 'taxTotal'>) => Promise<string>;
   updateSaleStatus: (saleId: string, status: SaleStatus) => Promise<void>;
   removeItemFromSale: (saleId: string, partToRemove: OrderPart) => Promise<void>;
   addStockEntry: (entry: Omit<StockEntry, 'id'>) => Promise<any>;
@@ -47,6 +47,7 @@ interface DataContextProps {
   updateExpense: (expense: Expense) => Promise<void>;
   deleteExpense: (expenseId: string) => Promise<void>;
   addMultiplePartsToOrder: (orderId: string, items: { itemId: string; quantity: number }[]) => Promise<void>;
+  addItemToSale: (saleId: string, item: { itemId: string; quantity: number; unitPrice: number; }) => Promise<void>;
   updateSettings: (settings: AppSettings) => Promise<void>;
   seedDatabase: () => Promise<void>;
   migrateInventoryToLots: () => Promise<void>;
@@ -86,48 +87,54 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     if (!inventoryData || !firestore || !user) {
-      setStockLots({});
-      setIsLoadingLots(!inventoryData);
+      setIsLoadingLots(true);
       return;
     }
 
-    setIsLoadingLots(true);
-    const unsubscribers: (() => void)[] = [];
-
-    inventoryData.forEach(item => {
-        if (!item.isService) {
-            const lotsRef = collection(firestore, `inventory/${item.id}/stockLots`);
-            const q = query(lotsRef, where("quantity", ">", 0), orderBy("createdAt", "asc"));
-            
-            const unsubscribe = onSnapshot(q, (querySnapshot) => {
-                const lots = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StockLot));
-                setStockLots(prevLots => ({
-                    ...prevLots,
-                    [item.id]: lots,
-                }));
-                 // Set loading to false once at least one listener has returned data.
-                if (isLoadingLots) setIsLoadingLots(false);
-            }, (error) => {
-                console.error(`Error listening to lots for item ${item.id}:`, error);
-                setStockLots(prevLots => ({
-                    ...prevLots,
-                    [item.id]: [],
-                }));
-            });
-
-            unsubscribers.push(unsubscribe);
-        }
-    });
-    
-    // If there are no physical products, we are not loading.
-    if (inventoryData.every(item => item.isService)) {
-        setIsLoadingLots(false);
+    const physicalProducts = inventoryData.filter(item => !item.isService);
+    if (physicalProducts.length === 0) {
+      setIsLoadingLots(false);
+      return;
     }
+
+    const unsubscribers: (() => void)[] = [];
+    let listenersAttached = 0;
+
+    physicalProducts.forEach(item => {
+        const lotsRef = collection(firestore, `inventory/${item.id}/stockLots`);
+        const q = query(lotsRef, where("quantity", ">", 0), orderBy("createdAt", "asc"));
+        
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const lots = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StockLot));
+            setStockLots(prevLots => ({
+                ...prevLots,
+                [item.id]: lots,
+            }));
+            
+            // This is a simple way to know when all initial data has been loaded
+            if (listenersAttached < physicalProducts.length) {
+                listenersAttached++;
+                if (listenersAttached === physicalProducts.length) {
+                    setIsLoadingLots(false);
+                }
+            }
+        }, (error) => {
+            console.error(`Error listening to lots for item ${item.id}:`, error);
+            if (listenersAttached < physicalProducts.length) {
+                listenersAttached++;
+                if (listenersAttached === physicalProducts.length) {
+                    setIsLoadingLots(false);
+                }
+            }
+        });
+
+        unsubscribers.push(unsubscribe);
+    });
 
     return () => {
         unsubscribers.forEach(unsub => unsub());
     };
-  }, [inventoryData, firestore, user, isLoadingLots]);
+  }, [inventoryData, firestore, user]);
 
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   
@@ -354,25 +361,58 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.setItem('settings', JSON.stringify(newSettings));
   }, []);
   
-  const createDraftSale = useCallback(async (customerId: string) => {
+  const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'status' | 'total' | 'subtotal' | 'taxTotal'>) => {
     if (!firestore) throw new Error("Firestore not initialized");
-    const client = clients.find(c => c.id === customerId);
-    if (!client) throw new Error("Client not found");
 
-    const newSaleData: Omit<Sale, 'id'> = {
-        customerId,
-        customerName: client.name,
-        createdAt: new Date().toISOString(),
-        items: [],
-        status: 'Borrador',
-        total: 0,
-        subtotal: 0,
-        taxTotal: 0,
-    };
-    const newDocRef = await addDoc(collection(firestore, 'sales'), newSaleData);
-    await updateDoc(newDocRef, { id: newDocRef.id });
-    return newDocRef.id;
-  }, [firestore, clients]);
+    const newSaleRef = doc(collection(firestore, 'sales'));
+
+    try {
+        await runTransaction(firestore, async (transaction) => {
+            const { subtotal, taxTotal, total } = saleData.items.reduce((acc, part) => {
+                const partSubtotal = part.unitPrice * part.quantity;
+                const partTax = partSubtotal * (part.taxRate / 100);
+                acc.subtotal += partSubtotal;
+                acc.taxTotal += partTax;
+                acc.total += partSubtotal + partTax;
+                return acc;
+            }, { subtotal: 0, taxTotal: 0, total: 0 });
+
+            for (const item of saleData.items) {
+                 if (item.lotId === 'SERVICE') continue;
+                 
+                 const lotRef = doc(firestore, `inventory/${item.itemId}/stockLots`, item.lotId);
+                 const lotDoc = await transaction.get(lotRef);
+
+                 if (!lotDoc.exists() || lotDoc.data().quantity < item.quantity) {
+                     const productName = inventory.find(p => p.id === item.itemId)?.name || 'Producto desconocido';
+                     throw new Error(`Stock insuficiente para ${productName}. Por favor, verifica el inventario.`);
+                 }
+                 
+                 transaction.update(lotRef, { quantity: lotDoc.data().quantity - item.quantity });
+            }
+            
+            const finalSaleData: Sale = {
+                ...saleData,
+                id: newSaleRef.id,
+                status: 'Completada',
+                subtotal,
+                taxTotal,
+                total,
+                createdAt: new Date().toISOString(),
+            };
+
+            transaction.set(newSaleRef, finalSaleData);
+        });
+
+        toast({ title: 'Venta Registrada', description: `La venta ${newSaleRef.id} ha sido completada.` });
+        return newSaleRef.id;
+
+    } catch (error: any) {
+        console.error("Error al registrar la venta:", error);
+        toast({ variant: 'destructive', title: 'Error en la Venta', description: error.message });
+        throw error;
+    }
+  }, [firestore, inventory, toast]);
   
   const updateSaleStatus = useCallback(async (saleId: string, status: SaleStatus) => {
       updateDocumentNonBlocking(doc(firestore, 'sales', saleId), { status });
@@ -390,6 +430,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!saleDoc.exists()) throw new Error('Venta no encontrada.');
 
             const currentSale = saleDoc.data() as Sale;
+            if (currentSale.status !== 'Borrador') {
+              throw new Error('No se pueden eliminar artículos de una venta que no está en estado de borrador.');
+            }
             
             const partIndex = currentSale.items.findIndex(p => 
                 p.lotId === lotId && 
@@ -436,6 +479,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         toast({ variant: 'destructive', title: 'Error al devolver item', description: e.message });
     }
   }, [firestore, toast]);
+  
+  const addItemToSale = useCallback(async (saleId: string, item: { itemId: string; quantity: number; unitPrice: number; }) => {
+    // This function will likely need to be re-implemented if draft sales are used again.
+    // For now, it's not used in the single-page sale creation flow.
+  }, []);
 
   const addMultiplePartsToOrder = useCallback(async (orderId: string, items: { itemId: string; quantity: number }[]) => {
     if (!firestore) return;
@@ -757,7 +805,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     updateOrderStatus,
     updateOrderDetails,
     removePartFromOrder,
-    createDraftSale,
+    addSale,
     updateSaleStatus,
     removeItemFromSale,
     addStockEntry,
@@ -767,6 +815,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     updateExpense,
     deleteExpense,
     addMultiplePartsToOrder,
+    addItemToSale,
     updateSettings,
     seedDatabase,
     migrateInventoryToLots,
@@ -787,3 +836,5 @@ export const useDataContext = () => {
   }
   return context;
 };
+
+    
