@@ -38,7 +38,7 @@ interface DataContextProps {
   updateOrderStatus: (orderId: string, status: OrderStatus, closedAt?: Date) => Promise<void>;
   updateOrderDetails: (orderId: string, details: { problemDescription?: string; diagnosis?: string; }) => Promise<void>;
   removePartFromOrder: (orderId: string, partToRemove: OrderPart) => Promise<void>;
-  addSale: (saleData: Omit<Sale, 'id' | 'total' | 'subtotal' | 'taxTotal' | 'items'> & { items: { itemId: string; quantity: number }[] }) => Promise<void>;
+  addSale: (saleData: Omit<Sale, 'id' | 'total' | 'subtotal' | 'taxTotal'>) => Promise<void>;
   addStockEntry: (entry: Omit<StockEntry, 'id'>) => Promise<any>;
   updateStockEntry: (entry: StockEntry) => Promise<void>; // This might be deprecated or changed
   deleteStockEntry: (entryId: string) => Promise<void>;
@@ -345,7 +345,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.setItem('settings', JSON.stringify(newSettings));
   }, []);
 
-  const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'total' | 'subtotal' | 'taxTotal' | 'items'> & { items: { itemId: string; quantity: number }[] }) => {
+  const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'total' | 'subtotal' | 'taxTotal'>) => {
     if (!firestore) throw new Error("Firestore not initialized");
 
     try {
@@ -767,5 +767,7 @@ export const useDataContext = () => {
 };
 
 
+
+    
 
     
