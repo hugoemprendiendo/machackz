@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
@@ -38,9 +37,8 @@ interface DataContextProps {
   updateOrderStatus: (orderId: string, status: OrderStatus, closedAt?: Date) => Promise<void>;
   updateOrderDetails: (orderId: string, details: { problemDescription?: string; diagnosis?: string; }) => Promise<void>;
   removePartFromOrder: (orderId: string, partToRemove: OrderPart) => Promise<void>;
-  createDraftSale: (customerId: string) => Promise<Sale | null>;
+  addSale: (saleData: Omit<Sale, 'id' | 'createdAt' | 'status' | 'total' | 'subtotal' | 'taxTotal' | 'items'> & { items: { itemId: string; quantity: number, name: string, unitPrice: number, taxRate: number }[] }) => Promise<void>;
   updateSaleStatus: (saleId: string, status: SaleStatus) => Promise<void>;
-  addItemToSale: (saleId: string, itemId: string, quantity: number) => Promise<void>;
   removeItemFromSale: (saleId: string, partToRemove: OrderPart) => Promise<void>;
   addStockEntry: (entry: Omit<StockEntry, 'id'>) => Promise<any>;
   updateStockEntry: (entry: StockEntry) => Promise<void>;
@@ -348,123 +346,98 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.setItem('settings', JSON.stringify(newSettings));
   }, []);
 
-  const createDraftSale = useCallback(async (customerId: string): Promise<Sale | null> => {
-    if (!firestore) return null;
-    const client = clients.find(c => c.id === customerId);
-    if (!client) return null;
-
-    const newSaleData: Omit<Sale, 'id'> = {
-        customerId,
-        customerName: client.name,
-        createdAt: new Date().toISOString(),
-        items: [],
-        status: 'Borrador',
-        total: 0,
-        subtotal: 0,
-        taxTotal: 0,
-    };
-    const newDocRef = await addDoc(collection(firestore, 'sales'), newSaleData);
-    return { ...newSaleData, id: newDocRef.id };
-  }, [firestore, clients]);
-
-  const updateSaleStatus = useCallback(async (saleId: string, status: SaleStatus) => {
-      updateDocumentNonBlocking(doc(firestore, 'sales', saleId), { status });
-  }, [firestore]);
-
-  const addItemToSale = useCallback(async (saleId: string, itemId: string, quantity: number) => {
-    if (!firestore || !itemId) {
-      toast({ variant: 'destructive', title: 'Error', description: 'ID de producto inválido.' });
-      return Promise.reject(new Error('ID de producto inválido.'));
-    }
-
-    const product = inventory.find((p) => p.id === itemId);
-    if (!product) {
-      toast({ variant: 'destructive', title: 'Error', description: `Producto con ID ${itemId} no encontrado.` });
-      return Promise.reject(new Error(`Producto no encontrado.`));
-    }
+  const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'createdAt' | 'status' | 'total' | 'subtotal' | 'taxTotal' | 'items'> & { items: { itemId: string; quantity: number, name: string, unitPrice: number, taxRate: number }[] }) => {
+    if (!firestore) throw new Error("Firestore not initialized");
     
     try {
-      if (product.isService) {
-        await runTransaction(firestore, async (transaction) => {
-          const saleRef = doc(firestore, 'sales', saleId);
-          const saleDoc = await transaction.get(saleRef);
-          if (!saleDoc.exists()) throw new Error("La venta no existe.");
+      await runTransaction(firestore, async (transaction) => {
+        const newSaleRef = doc(collection(firestore, 'sales'));
+        const finalSaleParts: OrderPart[] = [];
+  
+        for (const saleItem of saleData.items) {
+          const productDocRef = doc(firestore, "inventory", saleItem.itemId);
+          const productDoc = await transaction.get(productDocRef);
+          
+          if (!productDoc.exists()) {
+             throw new Error(`Producto con ID ${saleItem.itemId} no encontrado.`);
+          }
+          const product = productDoc.data() as InventoryItem;
+  
+          if (product.isService) {
+            finalSaleParts.push({
+              itemId: product.id,
+              name: product.name,
+              quantity: saleItem.quantity,
+              unitPrice: product.sellingPrice,
+              unitCost: 0,
+              taxRate: product.taxRate,
+              lotId: 'SERVICE',
+            });
+            continue;
+          }
+  
+          const lotsQuery = query(collection(firestore, `inventory/${saleItem.itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
+          const lotsSnapshot = await getDocs(lotsQuery); // Execute query outside transaction to get refs
+          
+          let quantityNeeded = saleItem.quantity;
+          const totalStockInLots = lotsSnapshot.docs.reduce((sum, d) => sum + d.data().quantity, 0);
 
-          const newPart: OrderPart = {
-            itemId: product.id, name: product.name, quantity,
-            unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: 'SERVICE'
-          };
-
-          const currentSale = saleDoc.data() as Sale;
-          const updatedItems = [...currentSale.items, newPart];
-          const { subtotal, taxTotal, total } = updatedItems.reduce((acc, part) => {
-            const partSubtotal = part.unitPrice * part.quantity;
-            const partTax = partSubtotal * (part.taxRate / 100);
-            acc.subtotal += partSubtotal;
-            acc.taxTotal += partTax;
-            acc.total += partSubtotal + partTax;
-            return acc;
-          }, { subtotal: 0, taxTotal: 0, total: 0 });
-
-          transaction.update(saleRef, { items: updatedItems, subtotal, taxTotal, total });
-        });
-
-      } else {
-        const lotsQuery = query(collection(firestore, `inventory/${itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
-        const lotsSnapshot = await getDocs(lotsQuery);
-
-        let quantityNeeded = quantity;
-        const totalStockInLots = lotsSnapshot.docs.reduce((sum, d) => sum + d.data().quantity, 0);
-
-        if (lotsSnapshot.empty || totalStockInLots < quantityNeeded) {
-          throw new Error(`Stock insuficiente para ${product.name}. Necesitas ${quantity} y solo hay ${totalStockInLots} disponibles.`);
-        }
-
-        await runTransaction(firestore, async (transaction) => {
-          const saleRef = doc(firestore, 'sales', saleId);
-          const saleDoc = await transaction.get(saleRef);
-          if (!saleDoc.exists()) throw new Error("La venta no existe.");
-
-          const newParts: OrderPart[] = [];
+          if (lotsSnapshot.empty || totalStockInLots < quantityNeeded) {
+            throw new Error(`Stock insuficiente para ${product.name}. Necesitas ${quantityNeeded} y solo hay ${totalStockInLots} disponibles.`);
+          }
 
           for (const lotDoc of lotsSnapshot.docs) {
             if (quantityNeeded <= 0) break;
-            const lotData = lotDoc.data() as StockLot;
-            const consume = Math.min(quantityNeeded, lotData.quantity);
             
-            newParts.push({
-              itemId: product.id, name: product.name, quantity: consume,
+            const lotDocInTransaction = await transaction.get(lotDoc.ref);
+            if (!lotDocInTransaction.exists()) continue;
+
+            const lotData = lotDocInTransaction.data() as StockLot;
+            const consume = Math.min(quantityNeeded, lotData.quantity);
+  
+            finalSaleParts.push({
+              itemId: saleItem.itemId, name: product.name, quantity: consume,
               unitPrice: product.sellingPrice, unitCost: lotData.costPrice, taxRate: product.taxRate, lotId: lotDoc.id,
             });
-            
-            const lotToUpdateRef = doc(firestore, `inventory/${itemId}/stockLots`, lotDoc.id);
-            transaction.update(lotToUpdateRef, { quantity: lotData.quantity - consume });
+  
+            transaction.update(lotDoc.ref, { quantity: lotData.quantity - consume });
             quantityNeeded -= consume;
           }
-
-          const currentSale = saleDoc.data() as Sale;
-          const updatedItems = [...currentSale.items, ...newParts];
-
-          const { subtotal, taxTotal, total } = updatedItems.reduce((acc, part) => {
-            const partSubtotal = part.unitPrice * part.quantity;
-            const partTax = partSubtotal * (part.taxRate / 100);
-            acc.subtotal += partSubtotal;
-            acc.taxTotal += partTax;
-            acc.total += partSubtotal + partTax;
-            return acc;
-          }, { subtotal: 0, taxTotal: 0, total: 0 });
-
-          transaction.update(saleRef, { items: updatedItems, subtotal, taxTotal, total });
-        });
-      }
-      toast({ title: 'Item añadido', description: `${quantity} x ${product.name} añadido a la venta.` });
-    } catch(e: any) {
-        console.error("Failed to add item to sale:", e);
-        toast({ variant: 'destructive', title: 'Error al añadir item', description: e.message });
-        throw e;
+        }
+  
+        const { subtotal, taxTotal, total } = finalSaleParts.reduce((acc, part) => {
+          const partSubtotal = part.unitPrice * part.quantity;
+          const partTax = partSubtotal * (part.taxRate / 100);
+          acc.subtotal += partSubtotal;
+          acc.taxTotal += partTax;
+          acc.total += partSubtotal + partTax;
+          return acc;
+        }, { subtotal: 0, taxTotal: 0, total: 0 });
+  
+        const finalSale: Omit<Sale, 'id'> = {
+          customerId: saleData.customerId,
+          customerName: saleData.customerName,
+          createdAt: new Date().toISOString(),
+          items: finalSaleParts,
+          status: 'Completada',
+          subtotal,
+          taxTotal,
+          total,
+        };
+  
+        transaction.set(newSaleRef, { ...finalSale, id: newSaleRef.id });
+      });
+  
+    } catch (e: any) {
+      console.error("Sale transaction failed:", e);
+      toast({ variant: "destructive", title: "Error al registrar la venta", description: e.message });
+      throw e;
     }
-  }, [firestore, inventory, toast]);
-
+  }, [firestore, toast]);
+  
+  const updateSaleStatus = useCallback(async (saleId: string, status: SaleStatus) => {
+      updateDocumentNonBlocking(doc(firestore, 'sales', saleId), { status });
+  }, [firestore]);
 
   const removeItemFromSale = useCallback(async (saleId: string, partToRemove: OrderPart) => {
     if (!firestore) return;
@@ -478,8 +451,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!saleDoc.exists()) throw new Error('Venta no encontrada.');
 
             const currentSale = saleDoc.data() as Sale;
-            const partIndex = currentSale.items.findIndex(p => p.lotId === lotId && p.quantity === quantity);
             
+            // This logic is safer for finding the exact part to remove
+            const partIndex = currentSale.items.findIndex(p => 
+                p.lotId === lotId && 
+                p.quantity === quantity &&
+                p.itemId === itemId &&
+                p.unitCost === partToRemove.unitCost
+            );
+
             if (partIndex === -1) throw new Error('Item no encontrado en la venta.');
             
             const updatedItems = [...currentSale.items.slice(0, partIndex), ...currentSale.items.slice(partIndex + 1)];
@@ -824,9 +804,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     updateOrderStatus,
     updateOrderDetails,
     removePartFromOrder,
-    createDraftSale,
+    addSale,
     updateSaleStatus,
-    addItemToSale,
     removeItemFromSale,
     addStockEntry,
     updateStockEntry,
@@ -856,3 +835,4 @@ export const useDataContext = () => {
   return context;
 };
 
+    

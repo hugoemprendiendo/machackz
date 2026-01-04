@@ -10,14 +10,12 @@ import {
   PlusCircle,
   Trash2,
   CheckCircle,
-  Loader2,
 } from "lucide-react";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
   CardFooter
 } from "@/components/ui/card";
 import {
@@ -33,137 +31,17 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useDataContext } from "@/context/data-context";
 import { SalePrintLayout } from "@/components/sales/sale-print-layout";
-import { Sale, SaleStatus, Client, InventoryItem, OrderPart } from "@/lib/types";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Sale, SaleStatus, Client, OrderPart, InventoryItem } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from "@/components/ui/alert-dialog";
+import { AddItemToSaleDialog } from "@/components/sales/add-item-to-sale-dialog";
 
 const statusColors: Record<SaleStatus, string> = {
     'Borrador': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
     'Completada': 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
     'Cancelada': 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
 };
-
-function AddPartDialog({ saleId }: { saleId: string }) {
-    const { inventory, addItemToSale } = useDataContext();
-    const { toast } = useToast();
-    const [isOpen, setIsOpen] = React.useState(false);
-    const [searchQuery, setSearchQuery] = React.useState("");
-    const [selectedItem, setSelectedItem] = React.useState<InventoryItem | null>(null);
-    const [quantity, setQuantity] = React.useState(1);
-    const [isAdding, setIsAdding] = React.useState(false);
-
-    const filteredInventory = React.useMemo(() => {
-        if (!searchQuery) return [];
-        const lowercasedQuery = searchQuery.toLowerCase();
-        return inventory.filter(item =>
-            item.name.toLowerCase().includes(lowercasedQuery) || 
-            (item.sku && item.sku.toLowerCase().includes(lowercasedQuery))
-        );
-    }, [inventory, searchQuery]);
-
-    const handleAddItem = async () => {
-        if (!selectedItem) return;
-        setIsAdding(true);
-        
-        try {
-            await addItemToSale(saleId, selectedItem.id, quantity);
-            handleOpenChange(false);
-        } catch (error) {
-            // Error is handled by toast in addItemToSale
-        } finally {
-            setIsAdding(false);
-        }
-    };
-    
-    const handleOpenChange = (open: boolean) => {
-        if (!open) {
-            setSearchQuery("");
-            setSelectedItem(null);
-            setQuantity(1);
-        }
-        setIsOpen(open);
-    };
-
-    return (
-        <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-            <DialogTrigger asChild>
-                <Button size="sm" variant="outline"><PlusCircle className="mr-2 h-4 w-4"/>Añadir Item</Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Añadir Item a la Venta</DialogTitle>
-                    <DialogDescription>Busca un producto o servicio para añadirlo.</DialogDescription>
-                </DialogHeader>
-                <div className="flex flex-col gap-4">
-                    <Input
-                        placeholder="Buscar Producto..."
-                        value={searchQuery}
-                        onChange={(e) => {
-                            setSearchQuery(e.target.value);
-                            setSelectedItem(null);
-                        }}
-                        disabled={isAdding}
-                    />
-                    <ScrollArea className="h-64 border rounded-md">
-                        <div className="p-2">
-                            {filteredInventory.length > 0 ? (
-                                filteredInventory.map(item => (
-                                    <div
-                                        key={item.id}
-                                        className={cn("flex justify-between items-center p-2 rounded-md cursor-pointer hover:bg-muted", {
-                                            "bg-muted": selectedItem?.id === item.id,
-                                        })}
-                                        onClick={() => setSelectedItem(item)}
-                                    >
-                                        <div>
-                                            <div className="font-medium">{item.name}</div>
-                                            <div className="text-xs text-muted-foreground">
-                                                {item.isService ? 'Servicio' : `Stock: ${item.stock}`}
-                                            </div>
-                                        </div>
-                                        <div className="font-medium">${item.sellingPrice.toFixed(2)}</div>
-                                    </div>
-                                ))
-                            ) : (
-                                <div className="text-sm text-center text-muted-foreground p-4">
-                                    {searchQuery ? "No se encontraron productos." : "Comienza a escribir para buscar..."}
-                                </div>
-                            )}
-                        </div>
-                    </ScrollArea>
-                    {selectedItem && (
-                        <div className="flex items-center gap-4 p-2 border rounded-lg bg-muted/50">
-                             <div className="flex-1">
-                                <Label htmlFor="quantity">Cantidad para <span className="font-semibold">{selectedItem.name}</span></Label>
-                                <Input
-                                    id="quantity"
-                                    type="number"
-                                    value={quantity}
-                                    onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                                    className="mt-1"
-                                    min="1"
-                                    max={selectedItem.isService ? undefined : selectedItem.stock}
-                                />
-                            </div>
-                            <Button onClick={handleAddItem} disabled={isAdding || !selectedItem} className="mt-5">
-                                {isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Añadir'}
-                            </Button>
-                        </div>
-                    )}
-                </div>
-                <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isAdding}>Cerrar</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
-}
-
 
 export default function SaleDetailPage() {
   const router = useRouter();
@@ -173,6 +51,7 @@ export default function SaleDetailPage() {
   
   const printRef = React.useRef<HTMLDivElement>(null);
   const [partToRemove, setPartToRemove] = React.useState<OrderPart | null>(null);
+  const [isItemDialogOpen, setItemDialogOpen] = React.useState(false);
 
   const sale = React.useMemo(() => sales.find((s) => s.id === params.id), [sales, params.id]);
   const client = React.useMemo(() => clients.find((c) => c.id === sale?.customerId), [clients, sale]);
@@ -210,15 +89,25 @@ export default function SaleDetailPage() {
   }
   
   const handleCompleteSale = async () => {
-    if (sale) {
+    if (sale && sale.items.length > 0) {
       await updateSaleStatus(sale.id, 'Completada');
       toast({
         title: "Venta Finalizada",
         description: "La venta ha sido marcada como completada.",
       });
       handlePrint();
+    } else {
+        toast({
+            variant: "destructive",
+            title: "Venta Vacía",
+            description: "No puedes finalizar una venta sin artículos.",
+        });
     }
   }
+
+  const handleAddItemToSale = (item: InventoryItem, quantity: number) => {
+    // This is handled by a separate component now
+  };
   
   if (!sale || !client) {
     return (
@@ -278,7 +167,11 @@ export default function SaleDetailPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Items de la Venta</CardTitle>
-                {sale.status === 'Borrador' && <AddPartDialog saleId={sale.id} />}
+                {sale.status === 'Borrador' && (
+                    <AddItemToSaleDialog saleId={sale.id} open={isItemDialogOpen} onOpenChange={setItemDialogOpen}>
+                        <Button size="sm" variant="outline"><PlusCircle className="mr-2 h-4 w-4"/>Añadir Item</Button>
+                    </AddItemToSaleDialog>
+                )}
               </CardHeader>
               <CardContent>
                 <Table>
@@ -292,7 +185,7 @@ export default function SaleDetailPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(sale.items || []).length === 0 ? <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">No hay productos en esta venta.</TableCell></TableRow>
+                    {(sale.items || []).length === 0 ? <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground h-24">No hay productos en esta venta.</TableCell></TableRow>
                     : (sale.items || []).map((item, index) => (
                       <TableRow key={`${item.lotId}-${index}`}>
                           <TableCell className="font-medium">{item.name} {item.taxRate > 0 && <Badge variant="outline" className="ml-2">IVA {item.taxRate}%</Badge>} </TableCell>
@@ -360,3 +253,5 @@ export default function SaleDetailPage() {
     </>
   );
 }
+
+    
