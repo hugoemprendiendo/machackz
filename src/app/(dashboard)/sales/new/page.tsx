@@ -12,9 +12,9 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -131,7 +131,7 @@ export default function NewSalePage() {
                     </div>
                 </CardContent>
                 <CardFooter>
-                    <Button type="submit" disabled={isCreating} className="ml-auto">
+                    <Button type="submit" disabled={isCreating || !selectedClientId} className="ml-auto">
                         {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         {isCreating ? 'Creando borrador...' : 'Continuar'}
                     </Button>

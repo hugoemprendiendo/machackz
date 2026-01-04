@@ -1,30 +1,28 @@
 
-
 export type InventoryItem = {
   id: string;
   name: string;
   category: string;
   sku: string;
-  // costPrice is now deprecated in favor of lots, but kept for migration
   costPrice: number; 
   sellingPrice: number;
-  stock: number; // This will now be a cached/calculated value
+  stock: number;
   minStock: number;
   hasTax: boolean;
   taxRate: number;
   isService: boolean;
-  lotsMigrated?: boolean; // Flag for idempotency
+  lotsMigrated?: boolean;
 };
 
 export type StockLot = {
-    id: string; // Document ID of the lot
+    id: string;
     purchaseId: string;
-    purchaseDate: string; // ISO String date of the purchase
-    createdAt: any; // Firestore Server Timestamp for FIFO ordering
-    quantity: number; // Quantity remaining in this lot
-    costPrice: number; // Cost for this specific lot
-    notes?: string; // E.g. "Devolución de Orden #ORD-123"
-    originalPurchaseDate?: string; // For returned lots
+    purchaseDate: string;
+    createdAt: any;
+    quantity: number;
+    costPrice: number;
+    notes?: string;
+    originalPurchaseDate?: string;
 }
 
 export type Client = {
@@ -68,9 +66,9 @@ export type OrderPart = {
   name: string;
   quantity: number;
   unitPrice: number;
-  unitCost: number; // The actual cost of the unit sold (from its lot)
+  unitCost: number;
   taxRate: number;
-  lotId: string; // Traceability back to the stock lot
+  lotId: string;
 };
 
 export type Order = {
@@ -114,7 +112,7 @@ export type Sale = {
 
 export type StockEntryItem = {
   itemId: string;
-  name: string; // denormalized for display
+  name: string;
   quantity: number;
   unitCost: number;
   taxRate: number;

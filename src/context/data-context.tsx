@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
@@ -43,7 +42,7 @@ interface DataContextProps {
   addItemToSale: (saleId: string, itemId: string, quantity: number) => Promise<void>;
   removeItemFromSale: (saleId: string, partToRemove: OrderPart) => Promise<void>;
   addStockEntry: (entry: Omit<StockEntry, 'id'>) => Promise<any>;
-  updateStockEntry: (entry: StockEntry) => Promise<void>; // This might be deprecated or changed
+  updateStockEntry: (entry: StockEntry) => Promise<void>;
   deleteStockEntry: (entryId: string) => Promise<void>;
   addExpense: (expense: Omit<Expense, 'id'>) => Promise<any>;
   updateExpense: (expense: Expense) => Promise<void>;
@@ -134,8 +133,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         hasTax: item.hasTax ?? true,
         taxRate: item.taxRate ?? 16,
         isService: item.isService ?? false,
-        stock: totalStockFromLots, // Ensure stock is always derived from lots if available
-        costPrice: averageCostPrice, // Use calculated average cost
+        stock: totalStockFromLots,
+        costPrice: averageCostPrice,
       };
     });
   }, [inventoryData, stockLots]);
@@ -806,7 +805,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     updateSaleStatus,
     addItemToSale,
     removeItemFromSale,
-
     addStockEntry,
     updateStockEntry,
     deleteStockEntry,
