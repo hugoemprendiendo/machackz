@@ -230,6 +230,11 @@ export default function NewOrderPage() {
       label: client.name,
   })), [clients]);
 
+  const selectedClientId = form.watch('customerId');
+  const selectedClient = React.useMemo(() => {
+    return clients.find(c => c.id === selectedClientId);
+  }, [clients, selectedClientId]);
+
   return (
     <div className="flex flex-col gap-8">
         <div className="flex items-center gap-4">
@@ -405,6 +410,9 @@ export default function NewOrderPage() {
                                />
                             )}
                         />
+                         {selectedClient && (
+                          <p className="text-sm text-muted-foreground mt-2">Teléfono: {selectedClient.phone}</p>
+                        )}
                         {form.formState.errors.customerId && <p className="text-sm text-destructive mt-2">{form.formState.errors.customerId.message}</p>}
                       </div>
                        <div className="space-y-2">
@@ -466,5 +474,3 @@ export default function NewOrderPage() {
     </div>
   );
 }
-
-    
