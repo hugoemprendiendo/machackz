@@ -35,7 +35,7 @@ import { Sale, SaleStatus, Client, OrderPart, InventoryItem } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from "@/components/ui/alert-dialog";
-import { AddItemToSaleDialog } from "@/components/sales/add-item-to-sale-dialog";
+import { AddPartDialog } from "@/components/sales/add-item-to-sale-dialog";
 
 const statusColors: Record<SaleStatus, string> = {
     'Borrador': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
@@ -51,7 +51,6 @@ export default function SaleDetailPage() {
   
   const printRef = React.useRef<HTMLDivElement>(null);
   const [partToRemove, setPartToRemove] = React.useState<OrderPart | null>(null);
-  const [isItemDialogOpen, setItemDialogOpen] = React.useState(false);
 
   const sale = React.useMemo(() => sales.find((s) => s.id === params.id), [sales, params.id]);
   const client = React.useMemo(() => clients.find((c) => c.id === sale?.customerId), [clients, sale]);
@@ -164,9 +163,7 @@ export default function SaleDetailPage() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Items de la Venta</CardTitle>
                 {sale.status === 'Borrador' && (
-                  <Button size="sm" variant="outline" onClick={() => setItemDialogOpen(true)}>
-                    <PlusCircle className="mr-2 h-4 w-4"/>Añadir Item
-                  </Button>
+                    <AddPartDialog saleId={sale.id}/>
                 )}
               </CardHeader>
               <CardContent>
@@ -246,7 +243,6 @@ export default function SaleDetailPage() {
         </div>
         <div style={{ display: 'none' }}><div ref={printRef}><SalePrintLayout sale={sale} client={client} /></div></div>
       </div>
-      <AddItemToSaleDialog saleId={sale.id} open={isItemDialogOpen} onOpenChange={setItemDialogOpen} />
     </>
   );
 }

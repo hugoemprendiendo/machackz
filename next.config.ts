@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -28,11 +29,6 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
-    ],
-  },
-  devIndicators: {
-    allowedDevOrigins: [
-      'https://*.cloudworkstations.dev',
     ],
   },
 };
