@@ -347,7 +347,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'total' | 'subtotal' | 'taxTotal' | 'items'> & { items: { itemId: string; quantity: number }[] }) => {
     if (!firestore) throw new Error("Firestore not initialized");
-  
+
     try {
         await runTransaction(firestore, async (transaction) => {
             const newSaleRef = doc(collection(firestore, 'sales'));
@@ -767,4 +767,3 @@ export const useDataContext = () => {
 };
 
 
-    
