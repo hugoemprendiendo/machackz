@@ -74,8 +74,7 @@ function AddPartDialog({ saleId }: { saleId: string }) {
             await addItemToSale(saleId, selectedItem.id, quantity);
             handleOpenChange(false);
         } catch (error) {
-            console.error("Error adding item to sale:", error);
-            // Toast with error is handled inside addItemToSale
+            // Error is handled by toast in addItemToSale
         } finally {
             setIsAdding(false);
         }
