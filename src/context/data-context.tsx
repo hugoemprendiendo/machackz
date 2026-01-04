@@ -347,14 +347,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'total' | 'subtotal' | 'taxTotal'>) => {
     if (!firestore) throw new Error("Firestore not initialized");
-  
+
+    const allAffectedItemIds = new Set<string>();
+
     try {
       await runTransaction(firestore, async (transaction) => {
         const finalSaleParts: OrderPart[] = [];
-  
+        
         for (const saleItem of saleData.items) {
           const product = inventory.find(p => p.id === saleItem.itemId);
           if (!product) throw new Error(`Producto con ID ${saleItem.itemId} no encontrado.`);
+          allAffectedItemIds.add(saleItem.itemId);
           
           if (product.isService) {
             finalSaleParts.push({
@@ -407,16 +410,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         transaction.set(newSaleRef, { ...finalSale, id: newSaleRef.id });
       });
   
-      const affectedItemIds = saleData.items.map(item => item.itemId);
       const newStockLots = { ...stockLots };
-      for (const itemId of affectedItemIds) {
-        const product = inventory.find(p => p.id === itemId);
-        if(product && !product.isService) {
+      for (const itemId of Array.from(allAffectedItemIds)) {
           const lotsRef = collection(firestore, `inventory/${itemId}/stockLots`);
           const q = query(lotsRef, where("quantity", ">", 0), orderBy("createdAt", "asc"));
           const querySnapshot = await getDocs(q);
           newStockLots[itemId] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StockLot));
-        }
       }
       setStockLots(newStockLots);
   
