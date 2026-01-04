@@ -360,17 +360,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     throw new Error("Se encontró un item sin ID en la venta.");
                 }
 
-                const productRef = doc(firestore, 'inventory', itemId);
-                const productDoc = await transaction.get(productRef);
-
-                if (!productDoc.exists()) {
-                    throw new Error(`Producto con ID ${itemId} no encontrado en la base de datos.`);
+                const product = inventory.find(p => p.id === itemId);
+                if (!product) {
+                    throw new Error(`Producto con ID ${itemId} no encontrado.`);
                 }
-                const product = productDoc.data() as InventoryItem;
 
                 if (product.isService) {
                     finalSaleParts.push({
-                        itemId: productDoc.id, name: product.name, quantity: quantity,
+                        itemId: product.id, name: product.name, quantity: quantity,
                         unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: 'SERVICE',
                     });
                 } else {
@@ -388,7 +385,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         const consume = Math.min(quantityNeeded, lotData.quantity);
 
                         finalSaleParts.push({
-                            itemId: productDoc.id, name: product.name, quantity: consume,
+                            itemId: product.id, name: product.name, quantity: consume,
                             unitPrice: product.sellingPrice, unitCost: lotData.costPrice, taxRate: product.taxRate, lotId: lotDoc.id,
                         });
 
@@ -430,7 +427,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
         throw e;
     }
-}, [firestore, toast]);
+}, [firestore, inventory, toast]);
 
   const addMultiplePartsToOrder = useCallback(async (orderId: string, items: { itemId: string; quantity: number }[]) => {
     if (!firestore) return;
