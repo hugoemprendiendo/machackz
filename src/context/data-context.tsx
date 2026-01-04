@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
@@ -364,7 +365,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // 1. Consume stock and prepare sale parts within the transaction
         const finalSaleParts: OrderPart[] = [];
   
-        for (const { item, product } of saleItemsWithDetails) {
+        for (const saleItem of saleItemsWithDetails) {
+          const { product, ...item } = saleItem;
           if (product.isService) {
             finalSaleParts.push({
               itemId: product.id, name: product.name, quantity: item.quantity,
