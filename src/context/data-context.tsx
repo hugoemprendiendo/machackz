@@ -347,31 +347,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'total' | 'subtotal' | 'taxTotal' | 'items'> & { items: { itemId: string; quantity: number }[] }) => {
     if (!firestore) throw new Error("Firestore not initialized");
-  
+
     const allAffectedItemIds = new Set<string>();
   
     try {
       await runTransaction(firestore, async (transaction) => {
-        // Step 1: Create a new sale document reference to get an ID upfront.
         const newSaleRef = doc(collection(firestore, 'sales'));
   
         const finalSaleParts: OrderPart[] = [];
-  
-        for (const saleItem of saleData.items) {
-          const product = inventory.find(p => p.id === saleItem.itemId);
-          if (!product) throw new Error(`Producto con ID ${saleItem.itemId} no encontrado.`);
-          allAffectedItemIds.add(saleItem.itemId);
-  
-          if (product.isService) {
-            finalSaleParts.push({
-              itemId: product.id, name: product.name, quantity: saleItem.quantity,
-              unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: 'SERVICE',
-            });
-            continue;
-          }
-  
-          // Read lots inside the transaction
-          const lotsQuery = query(collection(firestore, `inventory/${saleItem.itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
+        
+        const saleItemsWithDetails = saleData.items.map(item => {
+            const product = inventory.find(p => p.id === item.itemId);
+            if (!product) throw new Error(`Producto con ID ${item.itemId} no encontrado.`);
+            return { ...item, product };
+        });
+
+        for (const saleItem of saleItemsWithDetails) {
+            const product = saleItem.product;
+            allAffectedItemIds.add(product.id);
+
+            if (product.isService) {
+                finalSaleParts.push({
+                    itemId: product.id, name: product.name, quantity: saleItem.quantity,
+                    unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: 'SERVICE',
+                });
+                continue;
+            }
+
+          const lotsQuery = query(collection(firestore, `inventory/${product.id}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
           const lotsSnapshot = await transaction.get(lotsQuery);
   
           let quantityNeeded = saleItem.quantity;
@@ -411,7 +414,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           total,
         };
         
-        // Step 2: Set the new sale document with its data.
         transaction.set(newSaleRef, { ...finalSale, id: newSaleRef.id });
       });
   
@@ -768,3 +770,4 @@ export const useDataContext = () => {
   }
   return context;
 };
+
