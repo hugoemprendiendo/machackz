@@ -237,13 +237,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         chunks.push(entry.items.slice(i, i + 498));
     }
 
+    const allAffectedItemIds = new Set<string>();
+
     for (const chunk of chunks) {
         const batch = writeBatch(firestore);
         const stockEntryRef = doc(collection(firestore, 'stockEntries'));
         batch.set(stockEntryRef, {...entry, id: stockEntryRef.id, items: chunk});
 
         for (const item of chunk) {
-            const productRef = doc(firestore, 'inventory', item.itemId);
+            allAffectedItemIds.add(item.itemId);
             const lotRef = doc(collection(firestore, `inventory/${item.itemId}/stockLots`));
             const newLot: Omit<StockLot, 'id'> = {
                 purchaseId: stockEntryRef.id,
@@ -256,7 +258,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         await batch.commit();
     }
-  }, [firestore]);
+    
+    // Manually trigger a refresh of stock lots for affected items
+    const newStockLots = { ...stockLots };
+    for (const itemId of Array.from(allAffectedItemIds)) {
+        const lotsRef = collection(firestore, `inventory/${itemId}/stockLots`);
+        const q = query(lotsRef, where("quantity", ">", 0), orderBy("createdAt", "asc"));
+        const querySnapshot = await getDocs(q);
+        newStockLots[itemId] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StockLot));
+    }
+    setStockLots(newStockLots);
+
+  }, [firestore, stockLots]);
 
   const updateStockEntry = useCallback(async (updatedEntry: StockEntry) => {
     toast({ variant: 'destructive', title: 'Función no implementada', description: 'La edición de compras con sistema FIFO debe hacerse manualmente para asegurar la integridad.' });
@@ -392,7 +405,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             // Get the rest of the lots for the item that were not part of the consumption
              const unaffectedLots = (prevStockLots[itemId] || []).filter(
                 lot => !updatedLots[itemId].some(updatedLot => updatedLot.id === lot.id) && 
-                       !lots.find(l => l.data.id === lot.id) // This line is tricky, should be improved
+                       !Object.values(updatedLots).flat().find(l => l.id === lot.id) // This logic is imperfect
              );
             // This logic is imperfect, a full refetch might be safer on failure.
             // For now, this just replaces the lots with the updated state.
@@ -777,5 +790,7 @@ export const useDataContext = () => {
   }
   return context;
 };
+
+    
 
     
