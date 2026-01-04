@@ -126,7 +126,7 @@ export function NewProductDialog({ children, open, onOpenChange, onProductCreate
             Completa los datos para registrar un nuevo producto en tu inventario.
           </DialogDescription>
         </DialogHeader>
-        <form id="new-product-dialog-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
+        <form id="new-product-dialog-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4 pr-4">
            <div className="space-y-2">
               <Label htmlFor="name">Nombre del Producto</Label>
               <Input id="name" {...form.register("name")} placeholder="Ej. SSD 1TB Kingston" />
