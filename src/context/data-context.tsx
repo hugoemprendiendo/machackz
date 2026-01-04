@@ -355,30 +355,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const finalSaleParts: OrderPart[] = [];
         
         for (const saleItem of saleData.items) {
-          const product = inventory.find(p => p.id === saleItem.itemId);
-          if (!product) throw new Error(`Producto con ID ${saleItem.itemId} no encontrado.`);
-          allAffectedItemIds.add(saleItem.itemId);
-          
-          if (product.isService) {
-            finalSaleParts.push({
-              itemId: product.id, name: product.name, quantity: saleItem.quantity,
-              unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: 'SERVICE',
-            });
-            continue; // Skip to next item if it's a service
+          const itemId = saleItem.itemId;
+          const quantityNeeded = saleItem.quantity;
+  
+          if (!itemId) {
+            throw new Error(`Se encontró un item sin ID en la venta.`);
           }
   
-          const lotsQuery = query(collection(firestore, `inventory/${saleItem.itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
+          const product = inventory.find(p => p.id === itemId);
+          if (!product) throw new Error(`Producto con ID ${itemId} no encontrado.`);
+          allAffectedItemIds.add(itemId);
+  
+          if (product.isService) {
+            finalSaleParts.push({
+              itemId: product.id, name: product.name, quantity: quantityNeeded,
+              unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: 'SERVICE',
+            });
+            continue;
+          }
+  
+          const lotsQuery = query(collection(firestore, `inventory/${itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
           const lotsSnapshot = await transaction.get(lotsQuery);
   
-          let quantityNeeded = saleItem.quantity;
           if (lotsSnapshot.empty || lotsSnapshot.docs.reduce((sum, doc) => sum + doc.data().quantity, 0) < quantityNeeded) {
             throw new Error(`Stock insuficiente para ${product.name}.`);
           }
-  
+          
+          let remainingToFulfill = quantityNeeded;
           for (const lotDoc of lotsSnapshot.docs) {
-            if (quantityNeeded <= 0) break;
+            if (remainingToFulfill <= 0) break;
             const lotData = lotDoc.data() as StockLot;
-            const consume = Math.min(quantityNeeded, lotData.quantity);
+            const consume = Math.min(remainingToFulfill, lotData.quantity);
   
             finalSaleParts.push({
               itemId: product.id, name: product.name, quantity: consume,
@@ -386,7 +393,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             });
   
             transaction.update(lotDoc.ref, { quantity: lotData.quantity - consume });
-            quantityNeeded -= consume;
+            remainingToFulfill -= consume;
           }
         }
   
