@@ -47,8 +47,8 @@ const statusColors: Record<SaleStatus, string> = {
     'Cancelada': 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
 };
 
-function AddPartDialog({ onAddItem }: { onAddItem: (itemId: string, quantity: number) => void }) {
-    const { inventory } = useDataContext();
+function AddPartDialog({ saleId }: { saleId: string }) {
+    const { inventory, addItemToSale } = useDataContext();
     const { toast } = useToast();
     const [isOpen, setIsOpen] = React.useState(false);
     const [searchQuery, setSearchQuery] = React.useState("");
@@ -61,7 +61,7 @@ function AddPartDialog({ onAddItem }: { onAddItem: (itemId: string, quantity: nu
         const lowercasedQuery = searchQuery.toLowerCase();
         return inventory.filter(item =>
             item.name.toLowerCase().includes(lowercasedQuery) || 
-            item.sku?.toLowerCase().includes(lowercasedQuery)
+            (item.sku && item.sku.toLowerCase().includes(lowercasedQuery))
         );
     }, [inventory, searchQuery]);
 
@@ -69,21 +69,12 @@ function AddPartDialog({ onAddItem }: { onAddItem: (itemId: string, quantity: nu
         if (!selectedItem) return;
         setIsAdding(true);
         
-        if (!selectedItem.isService && selectedItem.stock < quantity) {
-            toast({
-                variant: 'destructive',
-                title: 'Sin Stock',
-                description: `No hay suficiente stock para ${selectedItem.name}. Necesitas ${quantity} pero solo hay ${selectedItem.stock}.`
-            });
-            setIsAdding(false);
-            return;
-        }
-
         try {
-            await onAddItem(selectedItem.id, quantity);
+            await addItemToSale(saleId, selectedItem.id, quantity);
             handleOpenChange(false);
         } catch (error) {
             console.error("Error adding item to sale:", error);
+            // Toast with error is handled inside addItemToSale
         } finally {
             setIsAdding(false);
         }
@@ -178,7 +169,7 @@ export default function SaleDetailPage() {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
-  const { sales, clients, settings, addItemToSale, removeItemFromSale, updateSaleStatus } = useDataContext();
+  const { sales, clients, settings, removeItemFromSale, updateSaleStatus } = useDataContext();
   
   const printRef = React.useRef<HTMLDivElement>(null);
   const [partToRemove, setPartToRemove] = React.useState<OrderPart | null>(null);
@@ -207,12 +198,6 @@ export default function SaleDetailPage() {
     }
   };
   
-  const handleAddItem = async (itemId: string, quantity: number) => {
-    if (sale) {
-        await addItemToSale(sale.id, itemId, quantity);
-    }
-  };
-
   const handleRemovePart = (part: OrderPart) => {
     setPartToRemove(part);
   }
@@ -293,7 +278,7 @@ export default function SaleDetailPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Items de la Venta</CardTitle>
-                {sale.status === 'Borrador' && <AddPartDialog onAddItem={handleAddItem} />}
+                {sale.status === 'Borrador' && <AddPartDialog saleId={sale.id} />}
               </CardHeader>
               <CardContent>
                 <Table>
