@@ -251,219 +251,212 @@ export default function NewOrderPage() {
             </div>
         </div>
         <form id="order-new-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2">
-              <Card>
-                  <CardHeader>
-                  <CardTitle>Información del equipo</CardTitle>
-                  <CardDescription>
-                      Ingresa la información sobre el equipo y el problema reportado por el cliente.
-                  </CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-6">
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="deviceType">Tipo de Dispositivo *</Label>
-                        <Input id="deviceType" {...form.register("deviceType")} placeholder="Ej. Laptop, Celular" />
-                        {form.formState.errors.deviceType && <p className="text-sm text-destructive">{form.formState.errors.deviceType.message}</p>}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="brand">Marca *</Label>
-                        <Input id="brand" {...form.register("brand")} placeholder="Ej. Apple, Dell, HP" />
-                        {form.formState.errors.brand && <p className="text-sm text-destructive">{form.formState.errors.brand.message}</p>}
-                      </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                       <div className="space-y-2">
-                        <Label htmlFor="deviceModel">Modelo</Label>
-                        <Input id="deviceModel" {...form.register("deviceModel")} placeholder="Ej. MacBook Pro 15, iPhone 12" />
-                         {form.formState.errors.deviceModel && <p className="text-sm text-destructive">{form.formState.errors.deviceModel.message}</p>}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="serialNumber">Número de serie</Label>
-                        <Input id="serialNumber" {...form.register("serialNumber")} />
-                      </div>
-                    </div>
-                    
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="ram">Memoria Ram</Label>
-                        <Input id="ram" {...form.register("ram")} placeholder="Ej. 8GB DDR4" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="hdd">Disco Duro</Label>
-                        <Input id="hdd" {...form.register("hdd")} placeholder="Ej. 256GB SSD" />
-                      </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="batterySerial">Serie batería</Label>
-                        <Input id="batterySerial" {...form.register("batterySerial")} />
-                      </div>
-                       <div className="space-y-2">
-                        <Label htmlFor="batteryCycles">Ciclos de batería</Label>
-                        <Input id="batteryCycles" type="number" {...form.register("batteryCycles")} />
-                      </div>
-                    </div>
-                    
-                    <div className="grid md:grid-cols-2 gap-4 items-center">
-                      <div className="space-y-2">
-                          <Label htmlFor="screws">Tornillos</Label>
-                          <Input id="screws" type="number" {...form.register("screws")} />
-                      </div>
-                      <div className="flex items-center space-x-2 pt-6">
-                          <Controller
-                              control={form.control}
-                              name="hasCharger"
-                              render={({ field }) => (
-                                  <Checkbox
-                                      id="hasCharger"
-                                      checked={field.value}
-                                      onCheckedChange={field.onChange}
-                                  />
-                              )}
-                          />
-                          <Label htmlFor="hasCharger">Cargador</Label>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="condition">Condición del equipo</Label>
-                      <Textarea id="condition" {...form.register("condition")} placeholder="Describe la condición física del equipo..." rows={3} />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="problemDescription">Falla / Servicio</Label>
-                      <Textarea
-                      id="problemDescription"
-                      {...form.register("problemDescription")}
-                      placeholder="Describe la falla reportada por el cliente..."
-                      rows={4}
-                      />
-                      {form.formState.errors.problemDescription && <p className="text-sm text-destructive">{form.formState.errors.problemDescription.message}</p>}
+          <Card>
+              <CardHeader>
+              <CardTitle>Cliente y Fecha</CardTitle>
+              <CardDescription>Selecciona el cliente y la fecha de creación.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label>Cliente</Label>
+                    <Controller
+                        control={form.control}
+                        name="customerId"
+                        render={({ field }) => (
+                           <Combobox 
+                             options={clientOptions}
+                             value={field.value}
+                             onChange={field.onChange}
+                             placeholder="Seleccionar cliente..."
+                             searchPlaceholder="Buscar cliente..."
+                             noResultsText="No se encontró el cliente."
+                           />
+                        )}
+                    />
+                     {selectedClient && (
+                      <p className="text-sm text-muted-foreground mt-2">Teléfono: {selectedClient.phone}</p>
+                    )}
+                    {form.formState.errors.customerId && <p className="text-sm text-destructive mt-2">{form.formState.errors.customerId.message}</p>}
+                    <NewClientDialog
+                        open={isClientDialogOpen}
+                        onOpenChange={setClientDialogOpen}
+                        onClientCreated={onClientCreated}
+                    >
+                        <Button type="button" variant="link" size="sm" className="p-0 h-auto">
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Crear Nuevo Cliente
+                        </Button>
+                    </NewClientDialog>
                   </div>
+                   <div className="space-y-2">
+                    <Label>Fecha de Creación</Label>
+                     <Controller
+                        control={form.control}
+                        name="createdAt"
+                        render={({ field }) => (
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                        "w-full justify-start text-left font-normal",
+                                        !field.value && "text-muted-foreground"
+                                    )}
+                                    >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {field.value ? format(field.value, "PPP") : <span>Elige una fecha</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                    mode="single"
+                                    selected={field.value}
+                                    onSelect={field.onChange}
+                                    initialFocus
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                        )}
+                    />
+                     {form.formState.errors.createdAt && <p className="text-sm text-destructive mt-2">{form.formState.errors.createdAt.message}</p>}
+                  </div>
+              </CardContent>
+          </Card>
+          
+          <Card>
+              <CardHeader>
+              <CardTitle>Información del equipo</CardTitle>
+              <CardDescription>
+                  Ingresa la información sobre el equipo y el problema reportado por el cliente.
+              </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-6">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="deviceType">Tipo de Dispositivo *</Label>
+                    <Input id="deviceType" {...form.register("deviceType")} placeholder="Ej. Laptop, Celular" />
+                    {form.formState.errors.deviceType && <p className="text-sm text-destructive">{form.formState.errors.deviceType.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="brand">Marca *</Label>
+                    <Input id="brand" {...form.register("brand")} placeholder="Ej. Apple, Dell, HP" />
+                    {form.formState.errors.brand && <p className="text-sm text-destructive">{form.formState.errors.brand.message}</p>}
+                  </div>
+                </div>
 
-                  <div className="flex items-center space-x-2">
+                <div className="grid md:grid-cols-2 gap-4">
+                   <div className="space-y-2">
+                    <Label htmlFor="deviceModel">Modelo</Label>
+                    <Input id="deviceModel" {...form.register("deviceModel")} placeholder="Ej. MacBook Pro 15, iPhone 12" />
+                     {form.formState.errors.deviceModel && <p className="text-sm text-destructive">{form.formState.errors.deviceModel.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="serialNumber">Número de serie</Label>
+                    <Input id="serialNumber" {...form.register("serialNumber")} />
+                  </div>
+                </div>
+                
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ram">Memoria Ram</Label>
+                    <Input id="ram" {...form.register("ram")} placeholder="Ej. 8GB DDR4" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="hdd">Disco Duro</Label>
+                    <Input id="hdd" {...form.register("hdd")} placeholder="Ej. 256GB SSD" />
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="batterySerial">Serie batería</Label>
+                    <Input id="batterySerial" {...form.register("batterySerial")} />
+                  </div>
+                   <div className="space-y-2">
+                    <Label htmlFor="batteryCycles">Ciclos de batería</Label>
+                    <Input id="batteryCycles" type="number" {...form.register("batteryCycles")} />
+                  </div>
+                </div>
+                
+                <div className="grid md:grid-cols-2 gap-4 items-center">
+                  <div className="space-y-2">
+                      <Label htmlFor="screws">Tornillos</Label>
+                      <Input id="screws" type="number" {...form.register("screws")} />
+                  </div>
+                  <div className="flex items-center space-x-2 pt-6">
                       <Controller
                           control={form.control}
-                          name="missingParts"
+                          name="hasCharger"
                           render={({ field }) => (
                               <Checkbox
-                                  id="missingParts"
+                                  id="hasCharger"
                                   checked={field.value}
                                   onCheckedChange={field.onChange}
                               />
                           )}
                       />
-                      <Label htmlFor="missingParts">¿Faltan piezas internas?</Label>
+                      <Label htmlFor="hasCharger">Cargador</Label>
                   </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="condition">Condición del equipo</Label>
+                  <Textarea id="condition" {...form.register("condition")} placeholder="Describe la condición física del equipo..." rows={3} />
+                </div>
 
-                  <div className="space-y-2">
-                      <Label htmlFor="notes">Notas</Label>
-                      <Textarea id="notes" {...form.register("notes")} placeholder="Notas internas sobre la reparación..." rows={3} />
-                  </div>
-                  
-                  <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                      <Label htmlFor="diagnosis">Diagnóstico Técnico</Label>
-                      <Button type="button" variant="outline" size="sm" onClick={handleGenerateDiagnosis} disabled={isAiLoading}>
-                          {isAiLoading ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                              <Wand2 className="mr-2 h-4 w-4" />
-                          )}
-                          Diagnóstico por IA
-                      </Button>
-                      </div>
-                      <Textarea
-                      id="diagnosis"
-                      {...form.register("diagnosis")}
-                      placeholder="El diagnóstico técnico aparecerá aquí..."
-                      rows={6}
-                      />
-                  </div>
-                  </CardContent>
-              </Card>
+                <div className="space-y-2">
+                  <Label htmlFor="problemDescription">Falla / Servicio</Label>
+                  <Textarea
+                  id="problemDescription"
+                  {...form.register("problemDescription")}
+                  placeholder="Describe la falla reportada por el cliente..."
+                  rows={4}
+                  />
+                  {form.formState.errors.problemDescription && <p className="text-sm text-destructive">{form.formState.errors.problemDescription.message}</p>}
               </div>
-              <div className="space-y-8">
-              <Card>
-                  <CardHeader>
-                  <CardTitle>Cliente y Fecha</CardTitle>
-                  <CardDescription>Selecciona el cliente y la fecha de creación.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-6">
-                      <div className="space-y-2">
-                        <Label>Cliente</Label>
-                        <Controller
-                            control={form.control}
-                            name="customerId"
-                            render={({ field }) => (
-                               <Combobox 
-                                 options={clientOptions}
-                                 value={field.value}
-                                 onChange={field.onChange}
-                                 placeholder="Seleccionar cliente..."
-                                 searchPlaceholder="Buscar cliente..."
-                                 noResultsText="No se encontró el cliente."
-                               />
-                            )}
-                        />
-                         {selectedClient && (
-                          <p className="text-sm text-muted-foreground mt-2">Teléfono: {selectedClient.phone}</p>
-                        )}
-                        {form.formState.errors.customerId && <p className="text-sm text-destructive mt-2">{form.formState.errors.customerId.message}</p>}
-                      </div>
-                       <div className="space-y-2">
-                        <Label>Fecha de Creación</Label>
-                         <Controller
-                            control={form.control}
-                            name="createdAt"
-                            render={({ field }) => (
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                        variant={"outline"}
-                                        className={cn(
-                                            "w-full justify-start text-left font-normal",
-                                            !field.value && "text-muted-foreground"
-                                        )}
-                                        >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {field.value ? format(field.value, "PPP") : <span>Elige una fecha</span>}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0">
-                                        <Calendar
-                                        mode="single"
-                                        selected={field.value}
-                                        onSelect={field.onChange}
-                                        initialFocus
-                                        />
-                                    </PopoverContent>
-                                </Popover>
-                            )}
-                        />
-                         {form.formState.errors.createdAt && <p className="text-sm text-destructive mt-2">{form.formState.errors.createdAt.message}</p>}
-                      </div>
-                  </CardContent>
-                  <CardFooter>
-                      <NewClientDialog
-                          open={isClientDialogOpen}
-                          onOpenChange={setClientDialogOpen}
-                          onClientCreated={onClientCreated}
-                      >
-                          <Button type="button" variant="outline" className="w-full">
-                              <PlusCircle className="mr-2 h-4 w-4" />
-                              Crear Nuevo Cliente
-                          </Button>
-                      </NewClientDialog>
-                  </CardFooter>
-              </Card>
+
+              <div className="flex items-center space-x-2">
+                  <Controller
+                      control={form.control}
+                      name="missingParts"
+                      render={({ field }) => (
+                          <Checkbox
+                              id="missingParts"
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                          />
+                      )}
+                  />
+                  <Label htmlFor="missingParts">¿Faltan piezas internas?</Label>
               </div>
-        </div>
-      </form>
+
+              <div className="space-y-2">
+                  <Label htmlFor="notes">Notas</Label>
+                  <Textarea id="notes" {...form.register("notes")} placeholder="Notas internas sobre la reparación..." rows={3} />
+              </div>
+              
+              <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                  <Label htmlFor="diagnosis">Diagnóstico Técnico</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={handleGenerateDiagnosis} disabled={isAiLoading}>
+                      {isAiLoading ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                          <Wand2 className="mr-2 h-4 w-4" />
+                      )}
+                      Diagnóstico por IA
+                  </Button>
+                  </div>
+                  <Textarea
+                  id="diagnosis"
+                  {...form.register("diagnosis")}
+                  placeholder="El diagnóstico técnico aparecerá aquí..."
+                  rows={6}
+                  />
+              </div>
+              </CardContent>
+          </Card>
+        </form>
       <div style={{ display: 'none' }}>
         {orderToPrint && clientToPrint && (
             <div ref={printComponentRef}>
