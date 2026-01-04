@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,7 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 interface AddItemToSaleDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAddItem: (item: InventoryItem, quantity: number) => void;
+  onAddItem: (item: InventoryItem, quantity: number, price: number) => void;
 }
 
 export function AddItemToSaleDialog({ open, onOpenChange, onAddItem }: AddItemToSaleDialogProps) {
@@ -32,6 +32,7 @@ export function AddItemToSaleDialog({ open, onOpenChange, onAddItem }: AddItemTo
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
     const [quantity, setQuantity] = useState(1);
+    const [price, setPrice] = useState(0);
 
     const filteredInventory = useMemo(() => {
         if (!searchQuery) return [];
@@ -41,6 +42,12 @@ export function AddItemToSaleDialog({ open, onOpenChange, onAddItem }: AddItemTo
             (item.sku && item.sku.toLowerCase().includes(lowercasedQuery))
         );
     }, [inventory, searchQuery]);
+
+    useEffect(() => {
+        if (selectedItem) {
+            setPrice(selectedItem.sellingPrice);
+        }
+    }, [selectedItem]);
 
     const handleAddItem = () => {
         if (!selectedItem) return;
@@ -54,7 +61,7 @@ export function AddItemToSaleDialog({ open, onOpenChange, onAddItem }: AddItemTo
             return;
         }
 
-        onAddItem(selectedItem, quantity);
+        onAddItem(selectedItem, quantity, price);
         handleDialogChange(false);
     };
     
@@ -63,6 +70,7 @@ export function AddItemToSaleDialog({ open, onOpenChange, onAddItem }: AddItemTo
             setSearchQuery("");
             setSelectedItem(null);
             setQuantity(1);
+            setPrice(0);
         }
         onOpenChange(isOpen);
     };
@@ -112,19 +120,28 @@ export function AddItemToSaleDialog({ open, onOpenChange, onAddItem }: AddItemTo
                     </ScrollArea>
                     {selectedItem && (
                         <div className="flex items-center gap-4 p-2 border rounded-lg bg-muted/50">
-                             <div className="flex-1">
-                                <Label htmlFor="quantity">Cantidad para <span className="font-semibold">{selectedItem.name}</span></Label>
+                             <div className="flex-1 space-y-1">
+                                <Label htmlFor="quantity">Cantidad</Label>
                                 <Input
                                     id="quantity"
                                     type="number"
                                     value={quantity}
                                     onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                                    className="mt-1"
                                     min="1"
                                     max={selectedItem.isService ? undefined : selectedItem.stock}
                                 />
                             </div>
-                            <Button onClick={handleAddItem} disabled={!selectedItem} className="mt-5">
+                            <div className="flex-1 space-y-1">
+                                <Label htmlFor="price">Precio Unit.</Label>
+                                <Input
+                                    id="price"
+                                    type="number"
+                                    step="0.01"
+                                    value={price}
+                                    onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+                                />
+                            </div>
+                            <Button onClick={handleAddItem} disabled={!selectedItem} className="self-end">
                                 Añadir
                             </Button>
                         </div>

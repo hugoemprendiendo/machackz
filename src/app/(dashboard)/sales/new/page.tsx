@@ -74,12 +74,12 @@ export default function NewSalePage() {
     setClientDialogOpen(false);
   };
   
-  const onAddItem = (item: InventoryItem, quantity: number) => {
+  const onAddItem = (item: InventoryItem, quantity: number, price: number) => {
     append({
         itemId: item.id,
         name: item.name,
         quantity: quantity,
-        unitPrice: item.sellingPrice,
+        unitPrice: price,
         taxRate: item.taxRate,
     });
     setItemDialogOpen(false);

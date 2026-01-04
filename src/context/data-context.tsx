@@ -127,7 +127,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => {
         unsubscribers.forEach(unsub => unsub());
     };
-  }, [inventoryData, firestore, user]);
+  }, [inventoryData, firestore, user, isLoadingLots]);
 
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   
@@ -357,6 +357,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'createdAt' | 'status' | 'total' | 'subtotal' | 'taxTotal' | 'items'> & { items: { itemId: string; quantity: number, name: string, unitPrice: number, taxRate: number }[] }) => {
     if (!firestore) throw new Error("Firestore not initialized");
 
+    const allAffectedItemIds = new Set<string>();
+  
     try {
       await runTransaction(firestore, async (transaction) => {
         const newSaleRef = doc(collection(firestore, 'sales'));
@@ -370,13 +372,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
              throw new Error(`Producto con ID ${saleItem.itemId} no encontrado.`);
           }
           const product = productDoc.data() as InventoryItem;
+
+          allAffectedItemIds.add(product.id);
   
           if (product.isService) {
             finalSaleParts.push({
               itemId: product.id,
               name: product.name,
               quantity: saleItem.quantity,
-              unitPrice: product.sellingPrice,
+              unitPrice: saleItem.unitPrice,
               unitCost: 0,
               taxRate: product.taxRate,
               lotId: 'SERVICE',
@@ -385,7 +389,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
   
           const lotsQuery = query(collection(firestore, `inventory/${saleItem.itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
-          const lotsSnapshot = await getDocs(lotsQuery); 
+          const lotsSnapshot = await getDocs(lotsQuery); // Must be outside transaction
           
           let quantityNeeded = saleItem.quantity;
           const totalStockInLots = lotsSnapshot.docs.reduce((sum, d) => sum + d.data().quantity, 0);
@@ -405,7 +409,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
             finalSaleParts.push({
               itemId: saleItem.itemId, name: product.name, quantity: consume,
-              unitPrice: product.sellingPrice, unitCost: lotData.costPrice, taxRate: product.taxRate, lotId: lotDoc.id,
+              unitPrice: saleItem.unitPrice, unitCost: lotData.costPrice, taxRate: product.taxRate, lotId: lotDoc.id,
             });
   
             transaction.update(lotDoc.ref, { quantity: lotData.quantity - consume });
