@@ -352,17 +352,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
     try {
       await runTransaction(firestore, async (transaction) => {
-        const saleItemsWithDetails = saleData.items.map(item => {
-          const product = inventory.find(p => p.id === item.itemId);
-          if (!product) throw new Error(`Producto con ID ${item.itemId} no encontrado.`);
-          return { ...item, product };
-        });
-  
         // 1. Consume stock and prepare sale parts within the transaction
         const finalSaleParts: OrderPart[] = [];
   
-        for (const saleItem of saleItemsWithDetails) {
-          const { product } = saleItem;
+        for (const saleItem of saleData.items) {
+          const product = inventory.find(p => p.id === saleItem.itemId);
+          if (!product) throw new Error(`Producto con ID ${saleItem.itemId} no encontrado.`);
+          
           if (product.isService) {
             finalSaleParts.push({
               itemId: product.id, name: product.name, quantity: saleItem.quantity,
