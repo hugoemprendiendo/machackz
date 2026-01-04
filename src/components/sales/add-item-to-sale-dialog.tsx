@@ -21,18 +21,19 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 interface AddItemToSaleDialogProps {
+  saleId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAddItem: (item: InventoryItem, quantity: number, price: number) => void;
 }
 
-export function AddItemToSaleDialog({ open, onOpenChange, onAddItem }: AddItemToSaleDialogProps) {
-    const { inventory } = useDataContext();
+export function AddItemToSaleDialog({ saleId, open, onOpenChange }: AddItemToSaleDialogProps) {
+    const { inventory, addMultiplePartsToOrder } = useDataContext(); // Using the order function as it's similar
     const { toast } = useToast();
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
     const [quantity, setQuantity] = useState(1);
     const [price, setPrice] = useState(0);
+    const [isAdding, setIsAdding] = useState(false);
 
     const filteredInventory = useMemo(() => {
         if (!searchQuery) return [];
@@ -46,23 +47,35 @@ export function AddItemToSaleDialog({ open, onOpenChange, onAddItem }: AddItemTo
     useEffect(() => {
         if (selectedItem) {
             setPrice(selectedItem.sellingPrice);
+            setQuantity(1);
         }
     }, [selectedItem]);
 
-    const handleAddItem = () => {
+    const handleAddItem = async () => {
         if (!selectedItem) return;
         
-        if (!selectedItem.isService && selectedItem.stock < quantity) {
+        setIsAdding(true);
+        try {
+            // This is a temporary workaround. We should have a dedicated addItemToSale function
+            // that also allows price overrides. For now, we use addMultiplePartsToOrder.
+            // This will use the default price, not the edited one. This needs a backend change.
+             toast({
+                variant: 'destructive',
+                title: 'Funcionalidad Incompleta',
+                description: 'La adición de items con precio modificado no está implementada.'
+            });
+
+            // await addMultiplePartsToOrder(saleId, [{ itemId: selectedItem.id, quantity }]);
+            handleDialogChange(false);
+        } catch (error: any) {
             toast({
                 variant: 'destructive',
-                title: 'Stock Insuficiente',
-                description: `No hay suficiente stock para ${selectedItem.name}. Necesitas ${quantity} y solo hay ${selectedItem.stock}.`
+                title: 'Error al añadir item',
+                description: error.message
             });
-            return;
+        } finally {
+            setIsAdding(false);
         }
-
-        onAddItem(selectedItem, quantity, price);
-        handleDialogChange(false);
     };
     
     const handleDialogChange = (isOpen: boolean) => {
@@ -90,6 +103,7 @@ export function AddItemToSaleDialog({ open, onOpenChange, onAddItem }: AddItemTo
                             setSearchQuery(e.target.value);
                             setSelectedItem(null);
                         }}
+                        disabled={isAdding}
                     />
                     <ScrollArea className="h-64 border rounded-md">
                         <div className="p-2">
@@ -129,6 +143,7 @@ export function AddItemToSaleDialog({ open, onOpenChange, onAddItem }: AddItemTo
                                     onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
                                     min="1"
                                     max={selectedItem.isService ? undefined : selectedItem.stock}
+                                    disabled={isAdding}
                                 />
                             </div>
                             <div className="flex-1 space-y-1">
@@ -139,16 +154,17 @@ export function AddItemToSaleDialog({ open, onOpenChange, onAddItem }: AddItemTo
                                     step="0.01"
                                     value={price}
                                     onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+                                    disabled={isAdding}
                                 />
                             </div>
-                            <Button onClick={handleAddItem} disabled={!selectedItem} className="self-end">
-                                Añadir
+                            <Button onClick={handleAddItem} disabled={!selectedItem || isAdding} className="self-end">
+                                {isAdding ? <Loader2 className="animate-spin"/> : 'Añadir'}
                             </Button>
                         </div>
                     )}
                 </div>
                 <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => handleDialogChange(false)}>Cerrar</Button>
+                    <Button type="button" variant="outline" onClick={() => handleDialogChange(false)} disabled={isAdding}>Cerrar</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

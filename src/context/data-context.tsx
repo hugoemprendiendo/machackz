@@ -356,8 +356,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'createdAt' | 'status' | 'total' | 'subtotal' | 'taxTotal' | 'items'> & { items: { itemId: string; quantity: number, name: string, unitPrice: number, taxRate: number }[] }) => {
     if (!firestore) throw new Error("Firestore not initialized");
-
-    const allAffectedItemIds = new Set<string>();
   
     try {
       await runTransaction(firestore, async (transaction) => {
@@ -372,8 +370,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
              throw new Error(`Producto con ID ${saleItem.itemId} no encontrado.`);
           }
           const product = productDoc.data() as InventoryItem;
-
-          allAffectedItemIds.add(product.id);
   
           if (product.isService) {
             finalSaleParts.push({
@@ -449,7 +445,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
       throw e;
     }
-  }, [firestore, toast]);
+  }, [firestore, inventory, toast]);
   
   const updateSaleStatus = useCallback(async (saleId: string, status: SaleStatus) => {
       updateDocumentNonBlocking(doc(firestore, 'sales', saleId), { status });

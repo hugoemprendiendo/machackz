@@ -104,10 +104,6 @@ export default function SaleDetailPage() {
         });
     }
   }
-
-  const handleAddItemToSale = (item: InventoryItem, quantity: number) => {
-    // This is handled by a separate component now
-  };
   
   if (!sale || !client) {
     return (
@@ -168,9 +164,9 @@ export default function SaleDetailPage() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Items de la Venta</CardTitle>
                 {sale.status === 'Borrador' && (
-                    <AddItemToSaleDialog saleId={sale.id} open={isItemDialogOpen} onOpenChange={setItemDialogOpen}>
-                        <Button size="sm" variant="outline"><PlusCircle className="mr-2 h-4 w-4"/>Añadir Item</Button>
-                    </AddItemToSaleDialog>
+                  <Button size="sm" variant="outline" onClick={() => setItemDialogOpen(true)}>
+                    <PlusCircle className="mr-2 h-4 w-4"/>Añadir Item
+                  </Button>
                 )}
               </CardHeader>
               <CardContent>
@@ -250,8 +246,7 @@ export default function SaleDetailPage() {
         </div>
         <div style={{ display: 'none' }}><div ref={printRef}><SalePrintLayout sale={sale} client={client} /></div></div>
       </div>
+      <AddItemToSaleDialog saleId={sale.id} open={isItemDialogOpen} onOpenChange={setItemDialogOpen} />
     </>
   );
 }
-
-    
