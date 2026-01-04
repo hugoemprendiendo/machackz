@@ -4,7 +4,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
 import { collection, doc, writeBatch, getDocs, query, serverTimestamp, runTransaction, where, orderBy, getDoc, DocumentReference, DocumentData, deleteDoc, addDoc, updateDoc } from "firebase/firestore";
-import type { InventoryItem, Client, Supplier, Order, StockEntry, OrderStatus, OrderPart, AppSettings, StockEntryItem, StockLot, Sale, Expense, SaleStatus } from '@/lib/types';
+import type { InventoryItem, Client, Supplier, Order, StockEntry, OrderStatus, OrderPart, AppSettings, StockEntryItem, StockLot, Sale, SaleStatus } from '@/lib/types';
 import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { seedClients, seedSuppliers, seedInventory, seedOrders, seedStockEntries } from '@/lib/seed-data';
@@ -433,6 +433,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch(e: any) {
         console.error("Failed to add item to sale:", e);
         toast({ variant: 'destructive', title: 'Error al añadir item', description: e.message });
+        throw e; // Re-throw to indicate failure
     }
   }, [firestore, inventory, toast]);
 
@@ -826,3 +827,6 @@ export const useDataContext = () => {
   }
   return context;
 };
+
+
+    
