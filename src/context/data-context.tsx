@@ -4,7 +4,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
 import { collection, doc, writeBatch, getDocs, query, serverTimestamp, runTransaction, where, orderBy, getDoc, DocumentReference, DocumentData, deleteDoc, addDoc, updateDoc } from "firebase/firestore";
-import type { InventoryItem, Client, Supplier, Order, StockEntry, OrderStatus, OrderPart, AppSettings, StockEntryItem, StockLot, Sale, SaleStatus } from '@/lib/types';
+import type { InventoryItem, Client, Supplier, Order, StockEntry, OrderStatus, OrderPart, AppSettings, StockEntryItem, StockLot, Sale, SaleStatus, Expense } from '@/lib/types';
 import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { seedClients, seedSuppliers, seedInventory, seedOrders, seedStockEntries } from '@/lib/seed-data';
@@ -372,20 +372,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [firestore]);
 
   const addItemToSale = useCallback(async (saleId: string, itemId: string, quantity: number) => {
-    if (!firestore) return;
-
-    const product = inventory.find(p => p.id === itemId);
-    if (!product) {
-        toast({ variant: 'destructive', title: 'Producto no encontrado' });
+    if (!firestore || !itemId) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Información del producto inválida.' });
         return;
     }
 
     try {
         await runTransaction(firestore, async (transaction) => {
             const saleRef = doc(firestore, 'sales', saleId);
-            const saleDoc = await transaction.get(saleRef);
-            if (!saleDoc.exists()) throw new Error("La venta no existe.");
+            const productRef = doc(firestore, 'inventory', itemId);
 
+            const [saleDoc, productDoc] = await Promise.all([
+                transaction.get(saleRef),
+                transaction.get(productRef)
+            ]);
+            
+            if (!saleDoc.exists()) throw new Error("La venta no existe.");
+            if (!productDoc.exists()) throw new Error("El producto no existe.");
+
+            const product = productDoc.data() as InventoryItem;
             let newParts: OrderPart[] = [];
             
             if (product.isService) {
@@ -398,8 +403,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const lotsSnapshot = await transaction.get(lotsQuery);
 
                 let quantityNeeded = quantity;
-                if (lotsSnapshot.empty || lotsSnapshot.docs.reduce((sum, d) => sum + d.data().quantity, 0) < quantityNeeded) {
-                    throw new Error(`Stock insuficiente para ${product.name}.`);
+                const totalStockInLots = lotsSnapshot.docs.reduce((sum, d) => sum + d.data().quantity, 0);
+
+                if (lotsSnapshot.empty || totalStockInLots < quantityNeeded) {
+                    throw new Error(`Stock insuficiente para ${product.name}. Necesitas ${quantity} y solo hay ${totalStockInLots} disponibles.`);
                 }
 
                 for (const lotDoc of lotsSnapshot.docs) {
@@ -429,11 +436,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             transaction.update(saleRef, { items: updatedItems, subtotal, taxTotal, total });
         });
-        toast({ title: 'Item añadido', description: `${quantity} x ${product.name} añadido a la venta.` });
+        toast({ title: 'Item añadido', description: `${quantity} x ${inventory.find(p=>p.id === itemId)?.name} añadido a la venta.` });
     } catch(e: any) {
         console.error("Failed to add item to sale:", e);
         toast({ variant: 'destructive', title: 'Error al añadir item', description: e.message });
-        throw e; // Re-throw to indicate failure
+        throw e;
     }
   }, [firestore, inventory, toast]);
 
@@ -827,6 +834,3 @@ export const useDataContext = () => {
   }
   return context;
 };
-
-
-    

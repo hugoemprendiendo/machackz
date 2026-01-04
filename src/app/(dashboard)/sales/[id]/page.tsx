@@ -150,7 +150,7 @@ function AddPartDialog({ saleId }: { saleId: string }) {
                                     max={selectedItem.isService ? undefined : selectedItem.stock}
                                 />
                             </div>
-                            <Button onClick={handleAddItem} disabled={isAdding} className="mt-5">
+                            <Button onClick={handleAddItem} disabled={isAdding || !selectedItem} className="mt-5">
                                 {isAdding ? 'Añadiendo...' : 'Añadir'}
                             </Button>
                         </div>
@@ -360,5 +360,3 @@ export default function SaleDetailPage() {
     </>
   );
 }
-
-    
