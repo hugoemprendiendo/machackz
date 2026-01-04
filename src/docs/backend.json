@@ -2,6 +2,24 @@
 
 {
   "entities": {
+    "Sale": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Sale",
+      "type": "object",
+      "description": "Represents a direct sale transaction, not tied to a service order.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the sale, prefixed with VTA-." },
+        "customerId": { "type": "string", "description": "Reference to Client." },
+        "customerName": { "type": "string", "description": "Denormalized name of the client." },
+        "createdAt": { "type": "string", "description": "Date and time of sale creation.", "format": "date-time" },
+        "items": { "type": "array", "description": "List of items sold.", "items": { "type": "object" } },
+        "total": { "type": "number", "description": "The grand total of the sale (subtotal + tax)." },
+        "subtotal": { "type": "number", "description": "The sum of all item prices before tax." },
+        "taxTotal": { "type": "number", "description": "The sum of all taxes for the items." },
+        "notes": { "type": "string", "description": "Optional notes for the sale." }
+      },
+      "required": ["id", "customerId", "customerName", "createdAt", "items", "total", "subtotal", "taxTotal"]
+    },
     "Expense": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Expense",
@@ -351,6 +369,15 @@
   },
   "firestore": {
     "structure": [
+      {
+        "path": "sales/{saleId}",
+        "definition": {
+          "entityName": "Sale",
+          "schema": { "$ref": "#/backend/entities/Sale" },
+          "description": "Stores records of direct sales.",
+          "params": [{ "name": "saleId", "description": "Unique identifier for the sale." }]
+        }
+      },
       {
         "path": "expenses/{expenseId}",
         "definition": {

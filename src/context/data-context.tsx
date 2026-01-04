@@ -3,8 +3,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
-import { collection, doc, writeBatch, getDocs, query, serverTimestamp, runTransaction, where, orderBy, getDoc, DocumentReference, DocumentData, deleteDoc } from "firebase/firestore";
-import type { InventoryItem, Client, Supplier, Order, StockEntry, OrderStatus, OrderPart, AppSettings, StockEntryItem, StockLot, Expense } from '@/lib/types';
+import { collection, doc, writeBatch, getDocs, query, serverTimestamp, runTransaction, where, orderBy, getDoc, DocumentReference, DocumentData, deleteDoc, addDoc } from "firebase/firestore";
+import type { InventoryItem, Client, Supplier, Order, StockEntry, OrderStatus, OrderPart, AppSettings, StockEntryItem, StockLot, Expense, Sale } from '@/lib/types';
 import { useCollection, useFirestore, useMemoFirebase, useUser } from '@/firebase';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { seedClients, seedSuppliers, seedInventory, seedOrders, seedStockEntries } from '@/lib/seed-data';
@@ -20,6 +20,7 @@ interface DataContextProps {
   suppliers: Supplier[];
   inventory: InventoryItem[];
   orders: Order[];
+  sales: Sale[];
   stockEntries: StockEntry[];
   expenses: Expense[];
   settings: AppSettings;
@@ -37,6 +38,7 @@ interface DataContextProps {
   updateOrderStatus: (orderId: string, status: OrderStatus, closedAt?: Date) => Promise<void>;
   updateOrderDetails: (orderId: string, details: { problemDescription?: string; diagnosis?: string; }) => Promise<void>;
   removePartFromOrder: (orderId: string, partToRemove: OrderPart) => Promise<void>;
+  addSale: (sale: Omit<Sale, 'id' | 'total' | 'subtotal' | 'taxTotal'>) => Promise<any>;
   addStockEntry: (entry: Omit<StockEntry, 'id'>) => Promise<any>;
   updateStockEntry: (entry: StockEntry) => Promise<void>; // This might be deprecated or changed
   deleteStockEntry: (entryId: string) => Promise<void>;
@@ -68,6 +70,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const ordersRef = useMemoFirebase(() => user ? collection(firestore, "orders") : null, [firestore, user]);
   const { data: ordersData, isLoading: isLoadingOrders } = useCollection<Order>(ordersRef);
+
+  const salesRef = useMemoFirebase(() => user ? collection(firestore, "sales") : null, [firestore, user]);
+  const { data: salesData, isLoading: isLoadingSales } = useCollection<Sale>(salesRef);
 
   const stockEntriesRef = useMemoFirebase(() => user ? collection(firestore, "stockEntries") : null, [firestore, user]);
   const { data: stockEntriesData, isLoading: isLoadingStockEntries } = useCollection<StockEntry>(stockEntriesRef);
@@ -110,6 +115,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const clients = useMemo(() => clientsData || [], [clientsData]);
   const suppliers = useMemo(() => suppliersData || [], [suppliersData]);
   const orders = useMemo(() => ordersData || [], [ordersData]);
+  const sales = useMemo(() => salesData || [], [salesData]);
   const stockEntries = useMemo(() => stockEntriesData || [], [stockEntriesData]);
   const expenses = useMemo(() => expensesData || [], [expensesData]);
 
@@ -131,7 +137,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   }, [inventoryData, stockLots]);
 
-  const isLoading = isLoadingClients || isLoadingSuppliers || isLoadingInventory || isLoadingOrders || isLoadingStockEntries || isLoadingExpenses || isLoadingLots;
+  const isLoading = isLoadingClients || isLoadingSuppliers || isLoadingInventory || isLoadingOrders || isLoadingStockEntries || isLoadingExpenses || isLoadingLots || isLoadingSales;
 
   const addClient = useCallback(async (client: Omit<Client, 'id' | 'createdAt'>) => {
     if (!clientsRef) return;
@@ -270,53 +276,38 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
             const stockEntry = stockEntryDoc.data() as StockEntry;
 
-            const itemsWithRefsPromises = stockEntry.items.map(async (item) => {
-                const productRef = doc(firestore, "inventory", item.itemId);
-                const lotsQuery = query(
+            const lotsQueryPromises = stockEntry.items.map(item => {
+                 const lotsQuery = query(
                     collection(firestore, `inventory/${item.itemId}/stockLots`),
                     where("purchaseId", "==", entryId)
                 );
-                
-                // This read is outside the transaction. It's safe because we validate later.
-                const lotSnapshot = await getDocs(lotsQuery); 
-                const lotDocRef = lotSnapshot.docs[0]?.ref;
-
-                return { item, productRef, lotDocRef };
+                return getDocs(lotsQuery);
             });
-
-            const itemsWithRefs = await Promise.all(itemsWithRefsPromises);
             
-            const docsToRead = itemsWithRefs.map(i => i.lotDocRef).filter(Boolean) as DocumentReference<DocumentData>[];
-            const lotDocs = await Promise.all(docsToRead.map(ref => transaction.get(ref)));
+            const lotSnapshots = await Promise.all(lotsQueryPromises);
+            
+            const lotDocsToRead = lotSnapshots.flatMap(snapshot => snapshot.docs.map(d => d.ref));
+            if (lotDocsToRead.length === 0) {
+                // If no lots were created for this entry, just delete the entry.
+                transaction.delete(stockEntryRef);
+                return;
+            }
 
-            for (let i = 0; i < itemsWithRefs.length; i++) {
-                const { item, lotDocRef } = itemsWithRefs[i];
-                if (!lotDocRef) {
-                     throw new Error(`No se encontró el lote de stock para ${item.name} de esta compra. No se puede revertir.`);
-                }
-                const lotDoc = lotDocs.find(d => d.ref.path === lotDocRef.path);
-                
+            const lotDocs = await Promise.all(lotDocsToRead.map(ref => transaction.get(ref)));
+
+            for (let i = 0; i < stockEntry.items.length; i++) {
+                const item = stockEntry.items[i];
+                const lotDoc = lotDocs[i];
+
                 if (!lotDoc || !lotDoc.exists()) {
-                    throw new Error(`El lote para ${item.name} ya no existe.`);
+                    console.warn(`No se encontró el lote para ${item.name} de esta compra. Pudo haber sido consumido y eliminado.`);
+                    continue;
                 }
                 const lotData = lotDoc.data() as StockLot;
                 if (lotData.quantity < item.quantity) {
-                     throw new Error(`El stock de ${item.name} (Lote: ${lotDoc.id.slice(-4)}) ya fue utilizado en una orden. No se puede eliminar la compra.`);
+                     throw new Error(`El stock de ${item.name} (Lote: ${lotDoc.id.slice(-4)}) ya fue utilizado. No se puede eliminar la compra.`);
                 }
-            }
-
-            for (let i = 0; i < itemsWithRefs.length; i++) {
-                const { item, productRef, lotDocRef } = itemsWithRefs[i];
-                const productDoc = await transaction.get(productRef); // Read product inside transaction
-
-                if (!productDoc.exists()) {
-                    console.warn(`El producto ${item.name} (ID: ${item.itemId}) no fue encontrado. Saltando la reversión de stock para este item.`);
-                    continue;
-                }
-                
-                const currentProduct = productDoc.data() as InventoryItem;
-                transaction.delete(lotDocRef!);
-                transaction.update(productRef, { stock: currentProduct.stock - item.quantity });
+                 transaction.delete(lotDoc.ref);
             }
 
             transaction.delete(stockEntryRef);
@@ -351,6 +342,78 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setSettings(newSettings);
     localStorage.setItem('settings', JSON.stringify(newSettings));
   }, []);
+
+  const consumeStock = useCallback(async (items: { itemId: string; quantity: number }[]) => {
+    if (!firestore) throw new Error("Firestore not initialized");
+
+    for (const item of items) {
+        const product = inventory.find(p => p.id === item.itemId);
+        if (!product || product.isService) continue;
+
+        const lotsCollectionRef = collection(firestore, `inventory/${item.itemId}/stockLots`);
+        const lotsQuery = query(lotsCollectionRef, where("quantity", ">", 0), orderBy("createdAt", "asc"));
+
+        try {
+            const lotsSnapshot = await getDocs(lotsQuery);
+            const lotsToConsume: { ref: DocumentReference, consume: number, data: StockLot }[] = [];
+            let quantityNeeded = item.quantity;
+
+            for (const lotDoc of lotsSnapshot.docs) {
+                if (quantityNeeded <= 0) break;
+                const lotData = lotDoc.data() as StockLot;
+                const consume = Math.min(quantityNeeded, lotData.quantity);
+                lotsToConsume.push({ ref: lotDoc.ref, consume, data: lotData });
+                quantityNeeded -= consume;
+            }
+
+            if (quantityNeeded > 0) {
+                throw new Error(`Stock insuficiente para ${product.name}.`);
+            }
+
+            await runTransaction(firestore, async (transaction) => {
+                for (const lotToUpdate of lotsToConsume) {
+                    const lotDoc = await transaction.get(lotToUpdate.ref);
+                    if (!lotDoc.exists()) throw new Error(`El lote para ${product.name} ya no existe.`);
+                    const currentLot = lotDoc.data() as StockLot;
+                    transaction.update(lotToUpdate.ref, { quantity: currentLot.quantity - lotToUpdate.consume });
+                }
+            });
+        } catch (e: any) {
+            console.error("Stock consumption transaction failed: ", e);
+            throw e; // Re-throw to be caught by the calling function
+        }
+    }
+  }, [firestore, inventory]);
+
+   const addSale = useCallback(async (saleData: Omit<Sale, 'id'| 'total' | 'subtotal' | 'taxTotal'>) => {
+    if (!salesRef || !firestore) throw new Error("Firestore not initialized");
+    
+    const { subtotal, taxTotal, total } = saleData.items.reduce((acc, item) => {
+        const itemSubtotal = item.unitPrice * item.quantity;
+        const itemTax = itemSubtotal * (item.taxRate / 100);
+        acc.subtotal += itemSubtotal;
+        acc.taxTotal += itemTax;
+        acc.total += itemSubtotal + itemTax;
+        return acc;
+    }, { subtotal: 0, taxTotal: 0, total: 0 });
+
+    const finalSale: Omit<Sale, 'id'> = {
+        ...saleData,
+        subtotal,
+        taxTotal,
+        total
+    };
+    
+    // Consume stock first
+    await consumeStock(saleData.items.map(i => ({ itemId: i.itemId, quantity: i.quantity })));
+    
+    // Then add the sale document
+    const salesCollection = collection(firestore, 'sales');
+    const docRef = await addDoc(salesCollection, finalSale);
+    await updateDocumentNonBlocking(docRef, { id: docRef.id });
+
+    return { id: docRef.id, ...finalSale };
+  }, [salesRef, firestore, consumeStock]);
 
   const addMultiplePartsToOrder = useCallback(async (orderId: string, items: { itemId: string; quantity: number }[]) => {
     if (!firestore) return;
@@ -510,7 +573,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         throw new Error("Firestore is not available or user is not authenticated.");
     }
     
-    const collectionsToClear = ['clients', 'suppliers', 'inventory', 'orders', 'stockEntries', 'expenses'];
+    const collectionsToClear = ['clients', 'suppliers', 'inventory', 'orders', 'stockEntries', 'expenses', 'sales'];
     
     for (const collectionName of collectionsToClear) {
         const collectionRef = collection(firestore, collectionName);
@@ -639,6 +702,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     suppliers,
     inventory,
     orders,
+    sales,
     stockEntries,
     expenses,
     settings,
@@ -656,6 +720,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     updateOrderStatus,
     updateOrderDetails,
     removePartFromOrder,
+    addSale,
     addStockEntry,
     updateStockEntry,
     deleteStockEntry,

@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -15,6 +16,7 @@ import {
   Settings,
   Receipt,
   Warehouse,
+  ShoppingBag,
 } from "lucide-react";
 import React from "react";
 
@@ -35,6 +37,7 @@ import { useDataContext } from "@/context/data-context";
 const menuItems = [
     { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/orders", icon: Wrench, label: "Órdenes" },
+    { href: "/sales", icon: ShoppingBag, label: "Ventas" },
     { href: "/products", icon: Boxes, label: "Productos" },
     { href: "/inventory", icon: Warehouse, label: "Inventario", isLowStock: true },
     { href: "/clients", icon: Users, label: "Clientes" },

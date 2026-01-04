@@ -1,6 +1,6 @@
 
 
-import type { InventoryItem, Client, Supplier, Order, StockEntry } from './types';
+import type { InventoryItem, Client, Supplier, Order, StockEntry, Sale } from './types';
 import { PlaceHolderImages } from './placeholder-images';
 
 // These are initial/fallback data and are not used when connected to Firebase.
@@ -10,6 +10,7 @@ export const clients: Client[] = [];
 export const suppliers: Supplier[] = [];
 export const inventory: InventoryItem[] = [];
 export const orders: Order[] = [];
+export const sales: Sale[] = [];
 export const stockEntries: StockEntry[] = [];
 
 export const cfdiUses = [

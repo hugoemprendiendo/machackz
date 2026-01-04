@@ -97,6 +97,18 @@ export type Order = {
   parts: OrderPart[];
 };
 
+export type Sale = {
+    id: string;
+    customerId: string;
+    customerName: string;
+    createdAt: string;
+    items: OrderPart[]; // Reusing OrderPart as it has the required structure
+    total: number;
+    subtotal: number;
+    taxTotal: number;
+    notes?: string;
+}
+
 export type StockEntryItem = {
   itemId: string;
   name: string; // denormalized for display
