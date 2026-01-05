@@ -46,7 +46,7 @@ interface DataContextProps {
   addExpense: (expense: Omit<Expense, 'id'>) => Promise<any>;
   updateExpense: (expense: Expense) => Promise<void>;
   deleteExpense: (expenseId: string) => Promise<void>;
-  addMultiplePartsToOrder: (orderId: string, items: { itemId: string; quantity: number }[]) => Promise<void>;
+  addMultiplePartsToOrder: (orderId: string, items: { itemId: string; quantity: number; unitPrice?: number }[]) => Promise<void>;
   updateSettings: (settings: AppSettings) => Promise<void>;
   seedDatabase: () => Promise<void>;
   migrateInventoryToLots: () => Promise<void>;
@@ -111,8 +111,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
     });
     
-    // Assume loading is finished once listeners are attached.
-    // A more robust solution might use Promise.all with getDocs for initial load.
     setIsLoadingLots(false);
 
     return () => {
@@ -302,7 +300,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             collection(firestore, `inventory/${item.itemId}/stockLots`),
             where("purchaseId", "==", entryId)
           );
-          const lotsSnapshot = await getDocs(lotsQuery); // Not a transaction.get
+          const lotsSnapshot = await getDocs(lotsQuery); 
           
           for (const lotDoc of lotsSnapshot.docs) {
              const lotData = lotDoc.data() as StockLot;
@@ -490,7 +488,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [firestore, toast]);
   
-  const addMultiplePartsToOrder = useCallback(async (orderId: string, items: { itemId: string; quantity: number }[]) => {
+  const addMultiplePartsToOrder = useCallback(async (orderId: string, items: { itemId: string; quantity: number; unitPrice?: number }[]) => {
     if (!firestore) return;
   
     for (const item of items) {
@@ -501,8 +499,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         continue;
       }
       
-      const isSale = orderId.startsWith('VTA-'); // This is a temporary way to differentiate
+      const isSale = orderId.startsWith('VTA-');
       const docRef = doc(firestore, isSale ? 'sales' : 'orders', orderId);
+      const unitPrice = item.unitPrice ?? product.sellingPrice;
 
       if (product.isService) {
         const currentDoc = (isSale ? sales : orders).find((o) => o.id === orderId);
@@ -510,9 +509,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
         const newPart: OrderPart = {
           itemId: product.id, name: product.name, quantity: item.quantity,
-          unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: "SERVICE",
+          unitPrice: unitPrice, unitCost: 0, taxRate: product.taxRate, lotId: "SERVICE",
         };
         
+        const key = isSale ? 'items' : 'parts';
         const existingItems = isSale ? (currentDoc as Sale).items : (currentDoc as Order).parts;
         const updatedItems = [...existingItems, newPart];
         
@@ -525,9 +525,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 acc.total += partSubtotal + partTax;
                 return acc;
             }, { subtotal: 0, taxTotal: 0, total: 0 });
-            await updateDoc(docRef, { items: updatedItems, subtotal, taxTotal, total });
+            await updateDoc(docRef, { [key]: updatedItems, subtotal, taxTotal, total });
         } else {
-             await updateDoc(docRef, { parts: updatedItems });
+             await updateDoc(docRef, { [key]: updatedItems });
         }
 
         toast({ title: "Servicio Añadido", description: `${item.quantity} x ${product.name} añadido(s).` });
@@ -558,7 +558,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const currentDoc = await transaction.get(docRef);
                 if (!currentDoc.exists()) throw new Error("El documento no existe.");
                 
-                const currentData = currentDoc.data() as Order | Sale;
+                const currentData = currentDoc.data();
                 const newParts: OrderPart[] = [];
 
                 for (const lotToUpdate of lotsToConsume) {
@@ -571,13 +571,15 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                     newParts.push({
                         itemId: item.itemId, name: product.name, quantity: lotToUpdate.consume,
-                        unitPrice: product.sellingPrice, unitCost: lotToUpdate.data.costPrice, taxRate: product.taxRate, lotId: lotToUpdate.ref.id,
+                        unitPrice: unitPrice, unitCost: lotToUpdate.data.costPrice, taxRate: product.taxRate, lotId: lotToUpdate.ref.id,
                     });
                     transaction.update(lotToUpdate.ref, { quantity: currentLot.quantity - lotToUpdate.consume });
                 }
                 
+                const key = isSale ? 'items' : 'parts';
                 const existingItems = isSale ? (currentData as Sale).items : (currentData as Order).parts;
                 const updatedItems = [...existingItems, ...newParts];
+                
 
                 if (isSale) {
                      const { subtotal, taxTotal, total } = updatedItems.reduce((acc, part) => {
@@ -588,9 +590,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         acc.total += partSubtotal + partTax;
                         return acc;
                     }, { subtotal: 0, taxTotal: 0, total: 0 });
-                    transaction.update(docRef, { items: updatedItems, subtotal, taxTotal, total });
+                    transaction.update(docRef, { [key]: updatedItems, subtotal, taxTotal, total });
                 } else {
-                     transaction.update(docRef, { parts: updatedItems });
+                     transaction.update(docRef, { [key]: updatedItems });
                 }
             });
 
@@ -844,3 +846,5 @@ export const useDataContext = () => {
   }
   return context;
 };
+
+    

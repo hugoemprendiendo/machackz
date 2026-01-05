@@ -90,7 +90,15 @@ function AddPartDialog({ orderId }: { orderId: string }) {
     const [searchQuery, setSearchQuery] = React.useState("");
     const [selectedItem, setSelectedItem] = React.useState<InventoryItem | null>(null);
     const [quantity, setQuantity] = React.useState(1);
+    const [price, setPrice] = React.useState(0);
     const [isAdding, setIsAdding] = React.useState(false);
+
+    React.useEffect(() => {
+        if (selectedItem) {
+            setPrice(selectedItem.sellingPrice);
+        }
+    }, [selectedItem]);
+
 
     const filteredInventory = React.useMemo(() => {
         if (!searchQuery) return [];
@@ -116,7 +124,7 @@ function AddPartDialog({ orderId }: { orderId: string }) {
         }
 
         try {
-            await addMultiplePartsToOrder(orderId, [{ itemId: selectedItem.id, quantity: quantity }]);
+            await addMultiplePartsToOrder(orderId, [{ itemId: selectedItem.id, quantity: quantity, unitPrice: price }]);
             handleOpenChange(false);
         } catch (error) {
             console.error("Error adding part to order:", error);
@@ -130,6 +138,7 @@ function AddPartDialog({ orderId }: { orderId: string }) {
             setSearchQuery("");
             setSelectedItem(null);
             setQuantity(1);
+            setPrice(0);
         }
         setIsOpen(open);
     };
@@ -182,9 +191,9 @@ function AddPartDialog({ orderId }: { orderId: string }) {
                         </div>
                     </ScrollArea>
                     {selectedItem && (
-                        <div className="flex items-center gap-4 p-2 border rounded-lg bg-muted/50">
-                             <div className="flex-1">
-                                <Label htmlFor="quantity">Cantidad para <span className="font-semibold">{selectedItem.name}</span></Label>
+                        <div className="grid grid-cols-2 gap-4 p-2 border rounded-lg bg-muted/50">
+                            <div>
+                                <Label htmlFor="quantity">Cantidad</Label>
                                 <Input
                                     id="quantity"
                                     type="number"
@@ -195,14 +204,25 @@ function AddPartDialog({ orderId }: { orderId: string }) {
                                     max={selectedItem.isService ? undefined : selectedItem.stock}
                                 />
                             </div>
-                            <Button onClick={handleAddItem} disabled={isAdding} className="mt-5">
-                                {isAdding ? 'Añadiendo...' : 'Añadir'}
-                            </Button>
+                            <div>
+                                <Label htmlFor="price">Precio Unit.</Label>
+                                <Input
+                                    id="price"
+                                    type="number"
+                                    step="0.01"
+                                    value={price}
+                                    onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+                                    className="mt-1"
+                                />
+                            </div>
                         </div>
                     )}
                 </div>
-                <DialogFooter>
+                <DialogFooter className="pt-4">
                     <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isAdding}>Cerrar</Button>
+                    <Button onClick={handleAddItem} disabled={isAdding || !selectedItem}>
+                        {isAdding ? 'Añadiendo...' : 'Añadir a la Orden'}
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -468,3 +488,5 @@ export default function OrderDetailPage() {
     </>
   );
 }
+
+    
