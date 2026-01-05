@@ -150,14 +150,11 @@ export default function OrdersPage() {
 
   const sortedOrders = React.useMemo(() => {
     return [...orders].sort((a, b) => {
-        const valA = a[sortKey];
-        const valB = b[sortKey];
-
         let comparison = 0;
         if (sortKey === 'createdAt') {
-            comparison = new Date(valA).getTime() - new Date(valB).getTime();
-        } else if (typeof valA === 'string' && typeof valB === 'string') {
-            comparison = valA.localeCompare(valB);
+            comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        } else { // customerName
+            comparison = a.customerName.localeCompare(b.customerName);
         }
 
         return sortDirection === 'asc' ? comparison : -comparison;
