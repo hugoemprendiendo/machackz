@@ -37,7 +37,7 @@ interface DataContextProps {
   updateOrderStatus: (orderId: string, status: OrderStatus, closedAt?: Date) => Promise<void>;
   updateOrderDetails: (orderId: string, details: { problemDescription?: string; diagnosis?: string; }) => Promise<void>;
   removePartFromOrder: (orderId: string, partToRemove: OrderPart) => Promise<void>;
-  addSale: (saleData: Omit<Sale, 'id' | 'status' | 'total' | 'subtotal' | 'taxTotal' | 'createdAt'>) => Promise<string>;
+  addSale: (saleData: Omit<Sale, 'id' | 'status' | 'total' | 'subtotal' | 'taxTotal'>) => Promise<string>;
   updateSaleStatus: (saleId: string, status: SaleStatus) => Promise<void>;
   removeItemFromSale: (saleId: string, partToRemove: OrderPart) => Promise<void>;
   addStockEntry: (entry: Omit<StockEntry, 'id'>) => Promise<any>;
@@ -86,55 +86,35 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     if (!inventoryData || !firestore || !user) {
-      setIsLoadingLots(true);
+      setIsLoadingLots(false);
       return;
     }
-  
+
     const physicalProducts = inventoryData.filter(item => !item.isService);
     if (physicalProducts.length === 0) {
       setIsLoadingLots(false);
       return;
     }
-  
-    let listenersAttached = 0;
-    const unsubscribers: (() => void)[] = [];
-  
-    const checkCompletion = () => {
-      listenersAttached++;
-      if (listenersAttached === physicalProducts.length) {
-        setIsLoadingLots(false);
-      }
-    };
-  
-    physicalProducts.forEach(item => {
+
+    const unsubscribers = physicalProducts.map(item => {
       const lotsRef = collection(firestore, `inventory/${item.id}/stockLots`);
       const q = query(lotsRef, where("quantity", ">", 0), orderBy("createdAt", "asc"));
       
-      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      return onSnapshot(q, (querySnapshot) => {
         const lots = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StockLot));
         setStockLots(prevLots => ({
           ...prevLots,
           [item.id]: lots,
         }));
-        if (!isLoadingLots) { // Avoid check on initial load
-            // This part is for real-time updates after initial load
-        }
       }, (error) => {
         console.error(`Error listening to lots for item ${item.id}:`, error);
-        checkCompletion();
       });
-  
-      // Manually trigger a get to handle initial load state
-      getDocs(q).then(() => {
-        checkCompletion();
-      }).catch(error => {
-        console.error(`Error fetching initial lots for item ${item.id}:`, error);
-        checkCompletion();
-      });
-  
-      unsubscribers.push(unsubscribe);
     });
-  
+    
+    // Assume loading is finished once listeners are attached.
+    // A more robust solution might use Promise.all with getDocs for initial load.
+    setIsLoadingLots(false);
+
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
@@ -365,94 +345,84 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.setItem('settings', JSON.stringify(newSettings));
   }, []);
   
-    const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'status' | 'total' | 'subtotal' | 'taxTotal' | 'createdAt'>) => {
-    if (!firestore) throw new Error("Firestore no está inicializado");
-
-    const newSaleRef = doc(collection(firestore, 'sales'));
-
-    try {
-      await runTransaction(firestore, async (transaction) => {
-        const finalItems: OrderPart[] = [];
+    const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'status' | 'total' | 'subtotal' | 'taxTotal'>) => {
+        if (!firestore) throw new Error("Firestore no está inicializado");
         
-        for (const item of saleData.items) {
-          const product = inventory.find(p => p.id === item.itemId);
-          if (!product) throw new Error(`Producto ${item.name} no encontrado.`);
+        const newSaleRef = doc(collection(firestore, 'sales'));
 
-          if (product.isService) {
-            finalItems.push({
-              itemId: item.itemId,
-              name: item.name,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              unitCost: item.unitCost,
-              taxRate: item.taxRate,
-              lotId: 'SERVICE'
+        try {
+            await runTransaction(firestore, async (transaction) => {
+                const finalItems: OrderPart[] = [];
+                const itemIdsToUpdate: string[] = [];
+                
+                for (const item of saleData.items) {
+                    itemIdsToUpdate.push(item.itemId);
+                    const product = inventory.find(p => p.id === item.itemId);
+                    if (!product) throw new Error(`Producto ${item.name} no encontrado.`);
+
+                    if (product.isService) {
+                        finalItems.push({
+                            itemId: item.itemId, name: item.name, quantity: item.quantity,
+                            unitPrice: item.unitPrice, unitCost: item.unitCost, taxRate: item.taxRate, lotId: 'SERVICE'
+                        });
+                    } else {
+                        const lotsQuery = query(collection(firestore, `inventory/${item.itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
+                        const lotsSnapshot = await getDocs(lotsQuery);
+
+                        let quantityNeeded = item.quantity;
+                        let totalStockInLots = 0;
+                        lotsSnapshot.docs.forEach(doc => totalStockInLots += doc.data().quantity);
+
+                        if (totalStockInLots < quantityNeeded) {
+                            throw new Error(`Stock insuficiente para ${product.name}. Necesitas ${quantityNeeded}, disponibles ${totalStockInLots}.`);
+                        }
+
+                        for (const lotDoc of lotsSnapshot.docs) {
+                            if (quantityNeeded <= 0) break;
+                            const lotData = lotDoc.data() as StockLot;
+                            const consume = Math.min(quantityNeeded, lotData.quantity);
+                            
+                            finalItems.push({
+                                itemId: item.itemId, name: item.name, quantity: consume,
+                                unitPrice: item.unitPrice, unitCost: lotData.costPrice, taxRate: item.taxRate, lotId: lotDoc.id
+                            });
+
+                            transaction.update(lotDoc.ref, { quantity: lotData.quantity - consume });
+                            quantityNeeded -= consume;
+                        }
+                    }
+                }
+
+                const { subtotal, taxTotal, total } = finalItems.reduce((acc, part) => {
+                    const partSubtotal = part.unitPrice * part.quantity;
+                    const partTax = partSubtotal * (part.taxRate / 100);
+                    acc.subtotal += partSubtotal;
+                    acc.taxTotal += partTax;
+                    acc.total += partSubtotal + partTax;
+                    return acc;
+                }, { subtotal: 0, taxTotal: 0, total: 0 });
+
+                const finalSaleData: Sale = {
+                    ...saleData,
+                    id: newSaleRef.id,
+                    status: 'Completada',
+                    items: finalItems,
+                    subtotal, taxTotal, total,
+                    createdAt: saleData.createdAt.toISOString(),
+                };
+
+                transaction.set(newSaleRef, finalSaleData);
             });
-          } else {
-            const lotsQuery = query(collection(firestore, `inventory/${item.itemId}/stockLots`), where("quantity", ">", 0), orderBy("createdAt", "asc"));
-            const lotsSnapshot = await getDocs(lotsQuery);
+            
+            toast({ title: 'Venta Registrada', description: `La venta ${newSaleRef.id} ha sido completada.` });
+            return newSaleRef.id;
 
-            let quantityNeeded = item.quantity;
-            let totalStockInLots = 0;
-            lotsSnapshot.docs.forEach(doc => totalStockInLots += doc.data().quantity);
-
-            if (totalStockInLots < quantityNeeded) {
-              throw new Error(`Stock insuficiente para ${product.name}. Necesitas ${quantityNeeded}, disponibles ${totalStockInLots}.`);
-            }
-
-            for (const lotDoc of lotsSnapshot.docs) {
-              if (quantityNeeded <= 0) break;
-              const lotData = lotDoc.data() as StockLot;
-              const consume = Math.min(quantityNeeded, lotData.quantity);
-              
-              finalItems.push({
-                itemId: item.itemId,
-                name: item.name,
-                quantity: consume,
-                unitPrice: item.unitPrice,
-                unitCost: lotData.costPrice,
-                taxRate: item.taxRate,
-                lotId: lotDoc.id
-              });
-
-              transaction.update(lotDoc.ref, { quantity: lotData.quantity - consume });
-              quantityNeeded -= consume;
-            }
-          }
+        } catch (error: any) {
+            console.error("Error al registrar la venta:", error);
+            toast({ variant: 'destructive', title: 'Error en la Venta', description: error.message });
+            throw error;
         }
-
-        const { subtotal, taxTotal, total } = finalItems.reduce((acc, part) => {
-          const partSubtotal = part.unitPrice * part.quantity;
-          const partTax = partSubtotal * (part.taxRate / 100);
-          acc.subtotal += partSubtotal;
-          acc.taxTotal += partTax;
-          acc.total += partSubtotal + partTax;
-          return acc;
-        }, { subtotal: 0, taxTotal: 0, total: 0 });
-
-        const finalSaleData: Sale = {
-          ...saleData,
-          id: newSaleRef.id,
-          status: 'Completada',
-          items: finalItems,
-          subtotal,
-          taxTotal,
-          total,
-          createdAt: new Date().toISOString(),
-        };
-
-        transaction.set(newSaleRef, finalSaleData);
-      });
-
-      toast({ title: 'Venta Registrada', description: `La venta ${newSaleRef.id} ha sido completada.` });
-      return newSaleRef.id;
-
-    } catch (error: any) {
-        console.error("Error al registrar la venta:", error);
-        toast({ variant: 'destructive', title: 'Error en la Venta', description: error.message });
-        throw error;
-    }
-  }, [firestore, inventory, toast]);
+    }, [firestore, inventory, toast]);
 
   const updateSaleStatus = useCallback(async (saleId: string, status: SaleStatus) => {
       updateDocumentNonBlocking(doc(firestore, 'sales', saleId), { status });
@@ -870,5 +840,3 @@ export const useDataContext = () => {
   }
   return context;
 };
-
-    

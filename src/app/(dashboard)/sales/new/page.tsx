@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ChevronLeft, PlusCircle, Trash2 } from "lucide-react";
+import { ChevronLeft, PlusCircle, Trash2, Calendar as CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +34,9 @@ import {
 } from "@/components/ui/table";
 import { AddItemToSaleDialog } from "@/components/sales/add-item-to-sale-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
 
 const saleItemSchema = z.object({
   itemId: z.string(),
@@ -46,6 +50,7 @@ const saleItemSchema = z.object({
 
 const saleFormSchema = z.object({
   customerId: z.string().min(1, "Por favor selecciona un cliente."),
+  createdAt: z.date(),
   items: z.array(saleItemSchema).min(1, "Debes añadir al menos un producto a la venta."),
 });
 
@@ -54,7 +59,7 @@ type SaleFormValues = z.infer<typeof saleFormSchema>;
 export default function NewSalePage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { clients, addSale, inventory } = useDataContext();
+  const { clients, addSale } = useDataContext();
   const [isClientDialogOpen, setClientDialogOpen] = React.useState(false);
   const [isItemDialogOpen, setItemDialogOpen] = React.useState(false);
 
@@ -62,6 +67,7 @@ export default function NewSalePage() {
     resolver: zodResolver(saleFormSchema),
     defaultValues: {
       customerId: "",
+      createdAt: new Date(),
       items: [],
     },
   });
@@ -116,7 +122,8 @@ export default function NewSalePage() {
         customerId: data.customerId,
         customerName: customer.name,
         items: data.items,
-        notes: ''
+        notes: '',
+        createdAt: data.createdAt,
       });
       router.push("/sales");
     } catch (e) {
@@ -154,145 +161,168 @@ export default function NewSalePage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Items de la Venta</CardTitle>
-                <CardDescription>
-                  Añade los productos y servicios que se venderán.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Producto</TableHead>
-                      <TableHead className="w-[100px]">Cantidad</TableHead>
-                      <TableHead className="w-[120px]">Precio Unit.</TableHead>
-                      <TableHead className="w-[120px] text-right">
-                        Subtotal
-                      </TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {fields.length > 0 ? (
-                      fields.map((field, index) => (
-                        <TableRow key={field.id}>
-                          <TableCell className="font-medium">
-                            {field.name}
-                            {field.taxRate > 0 && <Badge variant="outline" className="ml-2">IVA {field.taxRate}%</Badge>}
-                          </TableCell>
-                          <TableCell>{field.quantity}</TableCell>
-                          <TableCell>${field.unitPrice.toFixed(2)}</TableCell>
-                          <TableCell className="text-right">
-                            ${(field.quantity * field.unitPrice).toFixed(2)}
-                          </TableCell>
-                          <TableCell>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => remove(index)}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell
-                          colSpan={5}
-                          className="h-24 text-center text-muted-foreground"
-                        >
-                          Aún no hay productos en esta venta.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-                 {form.formState.errors.items && (
-                    <p className="text-sm text-destructive mt-4 text-center">{form.formState.errors.items.message}</p>
-                )}
-              </CardContent>
-              <CardFooter className="justify-between">
-                <AddItemToSaleDialog open={isItemDialogOpen} onOpenChange={setItemDialogOpen} onAddItem={onAddItem}>
-                  <Button type="button" variant="outline">
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Añadir Item
-                  </Button>
-                </AddItemToSaleDialog>
-                
-                 <div className="flex flex-col items-end gap-2 text-sm w-full max-w-xs">
-                    <div className="flex justify-between w-full">
-                        <span>Subtotal:</span>
-                        <span>${subtotal.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between w-full">
-                        <span>IVA:</span>
-                        <span>${taxTotal.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between w-full font-bold text-lg border-t pt-2 mt-2">
-                        <span>Total:</span>
-                        <span>${total.toFixed(2)}</span>
-                    </div>
-                </div>
-              </CardFooter>
-            </Card>
-          </div>
-
-          <div className="space-y-8">
-            <Card>
-              <CardHeader>
-                <CardTitle>Cliente</CardTitle>
-              </CardHeader>
-              <CardContent>
+        <Card>
+            <CardHeader>
+                <CardTitle>Cliente y Fecha</CardTitle>
+            </CardHeader>
+            <CardContent className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label>Selecciona un Cliente *</Label>
-                  <Controller
-                    control={form.control}
-                    name="customerId"
-                    render={({ field }) => (
-                      <Combobox
-                        options={clientOptions}
-                        value={field.value}
-                        onChange={field.onChange}
-                        placeholder="Seleccionar cliente..."
-                        searchPlaceholder="Buscar cliente..."
-                        noResultsText="No se encontró el cliente."
-                      />
+                    <Label>Selecciona un Cliente *</Label>
+                    <Controller
+                        control={form.control}
+                        name="customerId"
+                        render={({ field }) => (
+                        <Combobox
+                            options={clientOptions}
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Seleccionar cliente..."
+                            searchPlaceholder="Buscar cliente..."
+                            noResultsText="No se encontró el cliente."
+                        />
+                        )}
+                    />
+                    {form.formState.errors.customerId && (
+                        <p className="text-sm text-destructive mt-2">
+                        {form.formState.errors.customerId.message}
+                        </p>
                     )}
-                  />
-                  {form.formState.errors.customerId && (
-                    <p className="text-sm text-destructive mt-2">
-                      {form.formState.errors.customerId.message}
-                    </p>
-                  )}
+                    <NewClientDialog
+                        open={isClientDialogOpen}
+                        onOpenChange={setClientDialogOpen}
+                        onClientCreated={onClientCreated}
+                    >
+                        <Button
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            className="p-0 h-auto mt-2"
+                        >
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Crear Nuevo Cliente
+                        </Button>
+                    </NewClientDialog>
                 </div>
-                <NewClientDialog
-                  open={isClientDialogOpen}
-                  onOpenChange={setClientDialogOpen}
-                  onClientCreated={onClientCreated}
-                >
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    className="p-0 h-auto mt-2"
-                  >
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Crear Nuevo Cliente
-                  </Button>
-                </NewClientDialog>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+                <div className="space-y-2">
+                    <Label>Fecha de Venta</Label>
+                    <Controller
+                        control={form.control}
+                        name="createdAt"
+                        render={({ field }) => (
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                        "w-full justify-start text-left font-normal",
+                                        !field.value && "text-muted-foreground"
+                                    )}
+                                    >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {field.value ? format(field.value, "PPP") : <span>Elige una fecha</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                    mode="single"
+                                    selected={field.value}
+                                    onSelect={field.onChange}
+                                    initialFocus
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                        )}
+                    />
+                </div>
+            </CardContent>
+        </Card>
+
+        <Card>
+            <CardHeader>
+            <CardTitle>Items de la Venta</CardTitle>
+            <CardDescription>
+                Añade los productos y servicios que se venderán.
+            </CardDescription>
+            </CardHeader>
+            <CardContent>
+            <Table>
+                <TableHeader>
+                <TableRow>
+                    <TableHead>Producto</TableHead>
+                    <TableHead className="w-[100px]">Cantidad</TableHead>
+                    <TableHead className="w-[120px]">Precio Unit.</TableHead>
+                    <TableHead className="w-[120px] text-right">
+                    Subtotal
+                    </TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                </TableRow>
+                </TableHeader>
+                <TableBody>
+                {fields.length > 0 ? (
+                    fields.map((field, index) => (
+                    <TableRow key={field.id}>
+                        <TableCell className="font-medium">
+                        {field.name}
+                        {field.taxRate > 0 && <Badge variant="outline" className="ml-2">IVA {field.taxRate}%</Badge>}
+                        </TableCell>
+                        <TableCell>{field.quantity}</TableCell>
+                        <TableCell>${field.unitPrice.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">
+                        ${(field.quantity * field.unitPrice).toFixed(2)}
+                        </TableCell>
+                        <TableCell>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => remove(index)}
+                        >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                        </TableCell>
+                    </TableRow>
+                    ))
+                ) : (
+                    <TableRow>
+                    <TableCell
+                        colSpan={5}
+                        className="h-24 text-center text-muted-foreground"
+                    >
+                        Aún no hay productos en esta venta.
+                    </TableCell>
+                    </TableRow>
+                )}
+                </TableBody>
+            </Table>
+                {form.formState.errors.items && (
+                <p className="text-sm text-destructive mt-4 text-center">{form.formState.errors.items.message}</p>
+            )}
+            </CardContent>
+            <CardFooter className="justify-between">
+            <AddItemToSaleDialog open={isItemDialogOpen} onOpenChange={setItemDialogOpen} onAddItem={onAddItem}>
+                <Button type="button" variant="outline">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Añadir Item
+                </Button>
+            </AddItemToSaleDialog>
+            
+                <div className="flex flex-col items-end gap-2 text-sm w-full max-w-xs">
+                <div className="flex justify-between w-full">
+                    <span>Subtotal:</span>
+                    <span>${subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between w-full">
+                    <span>IVA:</span>
+                    <span>${taxTotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between w-full font-bold text-lg border-t pt-2 mt-2">
+                    <span>Total:</span>
+                    <span>${total.toFixed(2)}</span>
+                </div>
+            </div>
+            </CardFooter>
+        </Card>
       </form>
     </div>
   );
 }
-
-    
