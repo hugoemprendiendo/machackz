@@ -150,15 +150,15 @@ export default function OrdersPage() {
 
   const sortedOrders = React.useMemo(() => {
     return [...orders].sort((a, b) => {
-        let comparison = 0;
-        if (sortKey === 'createdAt') {
-            // Consistent ascending comparison
-            comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        } else { // customerName
-            comparison = a.customerName.localeCompare(b.customerName);
-        }
-        // Apply direction after comparison
-        return sortDirection === 'desc' ? -comparison : comparison;
+      const order = sortDirection === 'asc' ? 1 : -1;
+
+      if (sortKey === 'createdAt') {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return (dateA - dateB) * order;
+      } else { // customerName
+        return a.customerName.localeCompare(b.customerName) * order;
+      }
     });
   }, [orders, sortKey, sortDirection]);
   
