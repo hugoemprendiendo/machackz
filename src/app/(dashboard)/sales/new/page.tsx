@@ -48,7 +48,6 @@ const saleItemSchema = z.object({
 
 const saleFormSchema = z.object({
   customerId: z.string().min(1, "Por favor selecciona un cliente."),
-  createdAt: z.string(),
   items: z.array(saleItemSchema).min(1, "Debes añadir al menos un producto a la venta."),
 });
 
@@ -65,7 +64,6 @@ export default function NewSalePage() {
     resolver: zodResolver(saleFormSchema),
     defaultValues: {
       customerId: "",
-      createdAt: format(new Date(), "yyyy-MM-dd"),
       items: [],
     },
   });
@@ -121,7 +119,6 @@ export default function NewSalePage() {
         customerName: customer.name,
         items: data.items,
         notes: '',
-        createdAt: new Date(data.createdAt + 'T00:00:00'),
       });
       router.push("/sales");
     } catch (e) {
@@ -161,7 +158,7 @@ export default function NewSalePage() {
 
         <Card>
             <CardHeader>
-                <CardTitle>Cliente y Fecha</CardTitle>
+                <CardTitle>Cliente</CardTitle>
             </CardHeader>
             <CardContent className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
@@ -201,11 +198,6 @@ export default function NewSalePage() {
                         </Button>
                     </NewClientDialog>
                 </div>
-                <div className="space-y-2">
-                    <Label>Fecha de Venta</Label>
-                    <Input id="createdAt" type="date" {...form.register("createdAt")} />
-                    {form.formState.errors.createdAt && <p className="text-sm text-destructive mt-2">{form.formState.errors.createdAt.message}</p>}
-                </div>
             </CardContent>
         </Card>
 
@@ -213,7 +205,7 @@ export default function NewSalePage() {
             <CardHeader>
             <CardTitle>Items de la Venta</CardTitle>
             <CardDescription>
-                Añade los productos y servicios que se venderán.
+                Añade los productos y servicios que se venderán. La fecha se registrará automáticamente.
             </CardDescription>
             </CardHeader>
             <CardContent>

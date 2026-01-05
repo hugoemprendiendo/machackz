@@ -37,7 +37,7 @@ interface DataContextProps {
   updateOrderStatus: (orderId: string, status: OrderStatus, closedAt?: Date) => Promise<void>;
   updateOrderDetails: (orderId: string, details: { problemDescription?: string; diagnosis?: string; }) => Promise<void>;
   removePartFromOrder: (orderId: string, partToRemove: OrderPart) => Promise<void>;
-  addSale: (saleData: Omit<Sale, 'id' | 'status' | 'total' | 'subtotal' | 'taxTotal'>) => Promise<string>;
+  addSale: (saleData: Omit<Sale, 'id' | 'status' | 'total' | 'subtotal' | 'taxTotal' | 'createdAt'>) => Promise<string>;
   updateSaleStatus: (saleId: string, status: SaleStatus) => Promise<void>;
   removeItemFromSale: (saleId: string, partToRemove: OrderPart) => Promise<void>;
   addStockEntry: (entry: Omit<StockEntry, 'id'>) => Promise<any>;
@@ -344,7 +344,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.setItem('settings', JSON.stringify(newSettings));
   }, []);
   
-    const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'status' | 'total' | 'subtotal' | 'taxTotal'>) => {
+    const addSale = useCallback(async (saleData: Omit<Sale, 'id' | 'status' | 'total' | 'subtotal' | 'taxTotal' | 'createdAt'>) => {
         if (!firestore) throw new Error("Firestore no está inicializado");
         
         const newSaleRef = doc(collection(firestore, 'sales'));
@@ -407,7 +407,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     status: 'Completada',
                     items: finalItems,
                     subtotal, taxTotal, total,
-                    createdAt: saleData.createdAt.toISOString(),
+                    createdAt: new Date().toISOString(),
                 };
 
                 transaction.set(newSaleRef, finalSaleData);
