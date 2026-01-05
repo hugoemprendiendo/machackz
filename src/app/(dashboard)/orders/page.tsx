@@ -41,6 +41,31 @@ const statusColors: Record<OrderStatus, string> = {
 type SortKey = 'customerName' | 'createdAt';
 type SortDirection = 'asc' | 'desc';
 
+
+const getTimestamp = (dateValue: any): number => {
+    if (!dateValue) return 0;
+
+    // Firestore Timestamp object (not serialized)
+    if (typeof dateValue.toMillis === 'function') {
+        return dateValue.toMillis();
+    }
+    if (typeof dateValue.toDate === 'function') {
+        return dateValue.toDate().getTime();
+    }
+    // Serialized Firestore Timestamp
+    if (typeof dateValue === 'object' && dateValue !== null && 'seconds' in dateValue && 'nanoseconds' in dateValue) {
+        return dateValue.seconds * 1000 + dateValue.nanoseconds / 1000000;
+    }
+    // ISO string or number
+    const date = new Date(dateValue);
+    if (!isNaN(date.getTime())) {
+        return date.getTime();
+    }
+
+    return 0;
+};
+
+
 const OrdersTable = ({ orders, onSort, sortKey, sortDirection }: { orders: Order[], onSort: (key: SortKey) => void, sortKey: SortKey, sortDirection: SortDirection }) => {
     
     if (orders.length === 0) {
@@ -85,7 +110,7 @@ const OrdersTable = ({ orders, onSort, sortKey, sortDirection }: { orders: Order
                             {order.status}
                         </Badge>
                     </TableCell>
-                    <TableCell>{format(new Date(order.createdAt), 'dd/MM/yyyy HH:mm')}</TableCell>
+                    <TableCell>{format(getTimestamp(order.createdAt), 'dd/MM/yyyy HH:mm')}</TableCell>
                     <TableCell className="text-right">{order.closedAt ? format(parseISO(order.closedAt), 'dd/MM/yyyy') : 'N/A'}</TableCell>
                 </TableRow>
             ))}
@@ -151,8 +176,11 @@ export default function OrdersPage() {
   const sortedOrders = React.useMemo(() => {
     return [...orders].sort((a, b) => {
         const factor = sortDirection === 'asc' ? 1 : -1;
+        
         if (sortKey === 'createdAt') {
-            return (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * factor;
+            const timeA = getTimestamp(a.createdAt);
+            const timeB = getTimestamp(b.createdAt);
+            return (timeA - timeB) * factor;
         } else { // customerName
             return a.customerName.localeCompare(b.customerName) * factor;
         }
@@ -167,8 +195,8 @@ export default function OrdersPage() {
     const to = endOfDay(new Date((dateTo || dateFrom) + 'T00:00:00'));
 
     return sortedOrders.filter(order => {
-      const orderDate = new Date(order.createdAt);
-      return orderDate >= from && orderDate <= to;
+      const orderTimestamp = getTimestamp(order.createdAt);
+      return orderTimestamp >= from.getTime() && orderTimestamp <= to.getTime();
     });
   }, [sortedOrders, dateFrom, dateTo]);
 
