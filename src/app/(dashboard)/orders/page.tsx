@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { PlusCircle, File, X } from "lucide-react";
+import { PlusCircle, File, X, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useDataContext } from "@/context/data-context";
 import { Order, OrderStatus } from "@/lib/types";
-import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, startOfToday, subDays, parseISO } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, parseISO } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 
@@ -38,7 +38,10 @@ const statusColors: Record<OrderStatus, string> = {
     'Cancelada': 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
 };
 
-const OrdersTable = ({ orders }: { orders: Order[] }) => {
+type SortKey = 'customerName' | 'createdAt';
+type SortDirection = 'asc' | 'desc';
+
+const OrdersTable = ({ orders, onSort, sortKey, sortDirection }: { orders: Order[], onSort: (key: SortKey) => void, sortKey: SortKey, sortDirection: SortDirection }) => {
     
     if (orders.length === 0) {
         return (
@@ -48,15 +51,24 @@ const OrdersTable = ({ orders }: { orders: Order[] }) => {
         )
     }
 
+    const SortableHeader = ({ sortValue, children }: { sortValue: SortKey, children: React.ReactNode }) => (
+        <TableHead>
+            <Button variant="ghost" onClick={() => onSort(sortValue)}>
+                {children}
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+        </TableHead>
+    );
+
     return (
     <Table>
         <TableHeader>
             <TableRow>
                 <TableHead>Orden ID</TableHead>
-                <TableHead>Cliente</TableHead>
+                <SortableHeader sortValue="customerName">Cliente</SortableHeader>
                 <TableHead>Dispositivo</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Fecha Creación</TableHead>
+                <SortableHeader sortValue="createdAt">Fecha Creación</SortableHeader>
                 <TableHead className="text-right">Fecha Cierre</TableHead>
             </TableRow>
         </TableHeader>
@@ -86,6 +98,8 @@ export default function OrdersPage() {
   const [dateFrom, setDateFrom] = React.useState<string>('');
   const [dateTo, setDateTo] = React.useState<string>('');
   const [filterPreset, setFilterPreset] = React.useState<string>('all');
+  const [sortKey, setSortKey] = React.useState<SortKey>('createdAt');
+  const [sortDirection, setSortDirection] = React.useState<SortDirection>('desc');
 
   const handlePresetChange = (preset: string) => {
     setFilterPreset(preset);
@@ -125,7 +139,28 @@ export default function OrdersPage() {
     setFilterPreset('all');
   }
 
-  const sortedOrders = React.useMemo(() => [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), [orders]);
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+        setSortKey(key);
+        setSortDirection('asc');
+    }
+  };
+
+  const sortedOrders = React.useMemo(() => {
+    const sortable = [...orders];
+    sortable.sort((a, b) => {
+        if (a[sortKey] < b[sortKey]) {
+            return sortDirection === 'asc' ? -1 : 1;
+        }
+        if (a[sortKey] > b[sortKey]) {
+            return sortDirection === 'asc' ? 1 : -1;
+        }
+        return 0;
+    });
+    return sortable;
+  }, [orders, sortKey, sortDirection]);
   
   const filteredOrders = React.useMemo(() => {
     if (!dateFrom) {
@@ -205,7 +240,7 @@ export default function OrdersPage() {
                 <CardDescription>Aquí puedes ver todas las órdenes de servicio, sin importar su estado.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <OrdersTable orders={filteredOrders} />
+                    <OrdersTable orders={filteredOrders} onSort={handleSort} sortKey={sortKey} sortDirection={sortDirection} />
                 </CardContent>
             </Card>
         </TabsContent>
@@ -216,7 +251,7 @@ export default function OrdersPage() {
                 <CardDescription>Órdenes que están actualmente en progreso o esperando acción.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <OrdersTable orders={activeOrders} />
+                    <OrdersTable orders={activeOrders} onSort={handleSort} sortKey={sortKey} sortDirection={sortDirection} />
                 </CardContent>
             </Card>
         </TabsContent>
@@ -227,7 +262,7 @@ export default function OrdersPage() {
                 <CardDescription>Órdenes que han sido entregadas, cerradas o canceladas.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <OrdersTable orders={completedOrders} />
+                    <OrdersTable orders={completedOrders} onSort={handleSort} sortKey={sortKey} sortDirection={sortDirection} />
                 </CardContent>
             </Card>
         </TabsContent>
@@ -235,3 +270,5 @@ export default function OrdersPage() {
     </div>
   );
 }
+
+    
