@@ -85,7 +85,7 @@ const OrdersTable = ({ orders, onSort, sortKey, sortDirection }: { orders: Order
                             {order.status}
                         </Badge>
                     </TableCell>
-                    <TableCell>{format(new Date(order.createdAt), 'dd/MM/yyyy')}</TableCell>
+                    <TableCell>{format(new Date(order.createdAt), 'dd/MM/yyyy HH:mm')}</TableCell>
                     <TableCell className="text-right">{order.closedAt ? format(parseISO(order.closedAt), 'dd/MM/yyyy') : 'N/A'}</TableCell>
                 </TableRow>
             ))}
@@ -144,21 +144,18 @@ export default function OrdersPage() {
         setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
         setSortKey(key);
-        setSortDirection('asc');
+        setSortDirection('desc'); // Default to desc when changing column
     }
   };
 
   const sortedOrders = React.useMemo(() => {
     return [...orders].sort((a, b) => {
-      const order = sortDirection === 'asc' ? 1 : -1;
-
-      if (sortKey === 'createdAt') {
-        const dateA = new Date(a.createdAt).getTime();
-        const dateB = new Date(b.createdAt).getTime();
-        return (dateA - dateB) * order;
-      } else { // customerName
-        return a.customerName.localeCompare(b.customerName) * order;
-      }
+        const factor = sortDirection === 'asc' ? 1 : -1;
+        if (sortKey === 'createdAt') {
+            return (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * factor;
+        } else { // customerName
+            return a.customerName.localeCompare(b.customerName) * factor;
+        }
     });
   }, [orders, sortKey, sortDirection]);
   
