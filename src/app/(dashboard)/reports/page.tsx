@@ -29,10 +29,11 @@ import {
 import { useDataContext } from "@/context/data-context";
 import { OrderStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Wand2 } from "lucide-react";
+import { Wand2, X } from "lucide-react";
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, startOfToday, subDays, parseISO } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OrderDetailsDialog } from "@/components/reports/order-details-dialog";
+import { Input } from "@/components/ui/input";
 
 const COLORS = {
   'Abierta': 'hsl(var(--chart-1))',
@@ -57,39 +58,61 @@ const orderStatusChartConfig = {
 
 export default function ReportsPage() {
   const { orders, inventory, clients } = useDataContext();
-  const [dateRange, setDateRange] = React.useState<{from: Date, to: Date} | undefined>(undefined);
+  const [dateFrom, setDateFrom] = React.useState<string>('');
+  const [dateTo, setDateTo] = React.useState<string>('');
   const [filterPreset, setFilterPreset] = React.useState<string>('all');
   
   const handlePresetChange = (preset: string) => {
     setFilterPreset(preset);
     const now = new Date();
+    let from = '';
+    let to = '';
+
     switch (preset) {
         case 'today':
-            setDateRange({ from: startOfToday(), to: endOfDay(now) });
+            from = format(now, 'yyyy-MM-dd');
+            to = format(now, 'yyyy-MM-dd');
             break;
         case 'last7':
-            setDateRange({ from: startOfDay(subDays(now, 6)), to: endOfDay(now) });
+            from = format(subDays(now, 6), 'yyyy-MM-dd');
+            to = format(now, 'yyyy-MM-dd');
             break;
         case 'thisMonth':
-            setDateRange({ from: startOfMonth(now), to: endOfMonth(now) });
+            from = format(startOfMonth(now), 'yyyy-MM-dd');
+            to = format(endOfMonth(now), 'yyyy-MM-dd');
             break;
         case 'lastMonth':
             const lastMonth = subMonths(now, 1);
-            setDateRange({ from: startOfMonth(lastMonth), to: endOfMonth(lastMonth) });
+            from = format(startOfMonth(lastMonth), 'yyyy-MM-dd');
+            to = format(endOfMonth(lastMonth), 'yyyy-MM-dd');
             break;
         default:
-            setDateRange(undefined);
+            from = '';
+            to = '';
     }
+    setDateFrom(from);
+    setDateTo(to);
   };
+
+  const clearDates = () => {
+    setDateFrom('');
+    setDateTo('');
+    setFilterPreset('all');
+  }
   
   const completedOrders = React.useMemo(() => {
     return orders.filter(o => {
         if (o.status !== 'Entregada / Cerrada') return false;
-        if (!dateRange) return true;
+        if (!dateFrom) return true;
+        
+        const from = startOfDay(new Date(dateFrom + 'T00:00:00'));
+        const toDate = dateTo || dateFrom;
+        const to = endOfDay(new Date(toDate + 'T00:00:00'));
+
         const closedDate = o.closedAt ? parseISO(o.closedAt) : parseISO(o.createdAt);
-        return closedDate >= dateRange.from && closedDate <= dateRange.to;
+        return closedDate >= from && closedDate <= to;
     });
-  }, [orders, dateRange]);
+  }, [orders, dateFrom, dateTo]);
 
 
   const reportData = React.useMemo(() => {
@@ -149,7 +172,7 @@ export default function ReportsPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
-            <Select value={filterPreset} onValueChange={handlePresetChange}>
+             <Select value={filterPreset} onValueChange={handlePresetChange}>
                 <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Filtrar por fecha" />
                 </SelectTrigger>
@@ -161,7 +184,13 @@ export default function ReportsPage() {
                     <SelectItem value="lastMonth">Mes pasado</SelectItem>
                 </SelectContent>
             </Select>
-            <Button variant="outline" className="self-end"><Wand2 className="mr-2 h-4 w-4" />Analizar Rentabilidad con IA</Button>
+            <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setFilterPreset('custom'); }} className="w-[160px]"/>
+            <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-[160px]"/>
+             {dateFrom && (
+                <Button variant="ghost" size="icon" onClick={clearDates}>
+                    <X className="h-4 w-4" />
+                </Button>
+            )}
         </div>
       </div>
 
@@ -319,4 +348,5 @@ export default function ReportsPage() {
       </Card>
     </div>
   );
-}
+
+    
