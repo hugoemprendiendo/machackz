@@ -143,6 +143,13 @@ function AddPartDialog({ orderId }: { orderId: string }) {
         setIsOpen(open);
     };
 
+    const handleDesglosarIva = () => {
+        const currentPrice = price;
+        if (currentPrice > 0) {
+            setPrice(parseFloat((currentPrice / 1.16).toFixed(2)));
+        }
+    };
+
     return (
         <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
@@ -205,14 +212,16 @@ function AddPartDialog({ orderId }: { orderId: string }) {
                                 />
                             </div>
                             <div>
-                                <Label htmlFor="price">Precio Unit.</Label>
+                                <div className="flex justify-between items-center mb-1">
+                                    <Label htmlFor="price">Precio Unit.</Label>
+                                    <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={handleDesglosarIva}>Desglosar IVA</Button>
+                                </div>
                                 <Input
                                     id="price"
                                     type="number"
                                     step="0.01"
                                     value={price}
                                     onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
-                                    className="mt-1"
                                 />
                             </div>
                         </div>
