@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useDataContext } from "@/context/data-context";
 import { Order, OrderStatus } from "@/lib/types";
-import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, parseISO } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, parseISO, subDays } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 
@@ -149,17 +149,19 @@ export default function OrdersPage() {
   };
 
   const sortedOrders = React.useMemo(() => {
-    const sortable = [...orders];
-    sortable.sort((a, b) => {
-        if (a[sortKey] < b[sortKey]) {
-            return sortDirection === 'asc' ? -1 : 1;
+    return [...orders].sort((a, b) => {
+        const valA = a[sortKey];
+        const valB = b[sortKey];
+
+        let comparison = 0;
+        if (sortKey === 'createdAt') {
+            comparison = new Date(valA).getTime() - new Date(valB).getTime();
+        } else if (typeof valA === 'string' && typeof valB === 'string') {
+            comparison = valA.localeCompare(valB);
         }
-        if (a[sortKey] > b[sortKey]) {
-            return sortDirection === 'asc' ? 1 : -1;
-        }
-        return 0;
+
+        return sortDirection === 'asc' ? comparison : -comparison;
     });
-    return sortable;
   }, [orders, sortKey, sortDirection]);
   
   const filteredOrders = React.useMemo(() => {
@@ -270,5 +272,3 @@ export default function OrdersPage() {
     </div>
   );
 }
-
-    
