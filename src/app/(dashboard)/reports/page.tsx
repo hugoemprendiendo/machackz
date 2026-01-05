@@ -27,13 +27,26 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { useDataContext } from "@/context/data-context";
-import { OrderStatus } from "@/lib/types";
+import { OrderStatus, Order, Sale } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Wand2, X } from "lucide-react";
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, startOfToday, subDays, parseISO } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OrderDetailsDialog } from "@/components/reports/order-details-dialog";
 import { Input } from "@/components/ui/input";
+import Link from "next/link";
+import { SaleDetailsDialog } from "@/components/reports/sale-details-dialog";
+
+type Transaction = {
+  type: 'Orden' | 'Venta';
+  id: string;
+  date: string;
+  customerName: string;
+  total: number;
+  cost: number;
+  profit: number;
+  originalDoc: Order | Sale;
+}
 
 const COLORS = {
   'Abierta': 'hsl(var(--chart-1))',
@@ -57,7 +70,7 @@ const orderStatusChartConfig = {
 } satisfies ChartConfig;
 
 export default function ReportsPage() {
-  const { orders, inventory, clients } = useDataContext();
+  const { orders, sales, inventory, clients } = useDataContext();
   const [dateFrom, setDateFrom] = React.useState<string>('');
   const [dateTo, setDateTo] = React.useState<string>('');
   const [filterPreset, setFilterPreset] = React.useState<string>('all');
@@ -100,56 +113,75 @@ export default function ReportsPage() {
     setFilterPreset('all');
   }
   
-  const completedOrders = React.useMemo(() => {
-    return orders.filter(o => {
-        if (o.status !== 'Entregada / Cerrada') return false;
-        if (!dateFrom) return true;
-        
-        const from = startOfDay(new Date(dateFrom + 'T00:00:00'));
-        const toDate = dateTo || dateFrom;
-        const to = endOfDay(new Date(toDate + 'T00:00:00'));
+  const transactions: Transaction[] = React.useMemo(() => {
+    const from = dateFrom ? startOfDay(new Date(dateFrom + 'T00:00:00')) : null;
+    const to = dateTo ? endOfDay(new Date(dateTo + 'T00:00:00')) : (from ? endOfDay(new Date(dateFrom + 'T00:00:00')) : null);
 
-        const closedDate = o.closedAt ? parseISO(o.closedAt) : parseISO(o.createdAt);
-        return closedDate >= from && closedDate <= to;
-    });
-  }, [orders, dateFrom, dateTo]);
+    const completedOrders = orders
+        .filter(o => {
+            if (o.status !== 'Entregada / Cerrada') return false;
+            if (!from || !to) return true;
+            const closedDate = o.closedAt ? parseISO(o.closedAt) : parseISO(o.createdAt);
+            return closedDate >= from && closedDate <= to;
+        })
+        .map(order => {
+            const cost = order.parts.reduce((sum, part) => sum + part.unitCost * part.quantity, 0);
+            const total = order.parts.reduce((sum, part) => {
+                const sub = part.unitPrice * part.quantity;
+                return sum + sub + (sub * (part.taxRate / 100));
+            }, 0);
+            return {
+                type: 'Orden' as const,
+                id: order.id,
+                date: order.closedAt || order.createdAt,
+                customerName: order.customerName,
+                total: total,
+                cost: cost,
+                profit: total - cost,
+                originalDoc: order
+            };
+        });
+
+    const completedSales = sales
+        .filter(s => {
+            if (s.status !== 'Completada') return false;
+            if (!from || !to) return true;
+            const saleDate = parseISO(s.createdAt);
+            return saleDate >= from && saleDate <= to;
+        })
+        .map(sale => {
+            const cost = sale.items.reduce((sum, item) => sum + item.unitCost * item.quantity, 0);
+            return {
+                type: 'Venta' as const,
+                id: sale.id,
+                date: sale.createdAt,
+                customerName: sale.customerName,
+                total: sale.total,
+                cost: cost,
+                profit: sale.total - cost,
+                originalDoc: sale
+            };
+        });
+
+    return [...completedOrders, ...completedSales].sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
+  }, [orders, sales, dateFrom, dateTo]);
 
 
-  const reportData = React.useMemo(() => {
-    return completedOrders.map(order => {
-      const partsCost = order.parts.reduce((sum, part) => sum + part.unitCost * part.quantity, 0);
-      const partsPrice = order.parts.reduce((sum, part) => {
-        const sub = part.unitPrice * part.quantity;
-        return sum + sub + (sub * (part.taxRate/100));
-      }, 0);
-      const profit = partsPrice - partsCost;
-
-      return {
-        ...order,
-        date: order.closedAt || order.createdAt,
-        partsPrice: partsPrice,
-        cost: partsCost,
-        total: partsPrice,
-        profit: profit,
-      };
-    });
-  }, [completedOrders]);
-
-  const totalRevenue = reportData.reduce((sum, item) => sum + item.total, 0);
-  const totalNetProfit = reportData.reduce((sum, item) => sum + item.profit, 0);
+  const totalRevenue = transactions.reduce((sum, item) => sum + item.total, 0);
+  const totalNetProfit = transactions.reduce((sum, item) => sum + item.profit, 0);
   const margin = totalRevenue > 0 ? (totalNetProfit / totalRevenue) * 100 : 0;
   const inventoryValue = inventory.reduce((sum, item) => sum + item.costPrice * item.stock, 0);
 
   const dailyIncomeData = React.useMemo(() => {
-     if (reportData.length === 0) return [];
+     if (transactions.length === 0) return [];
      const dailyData: {[key: string]: number} = {};
-     reportData.forEach(item => {
+     transactions.forEach(item => {
          const day = format(new Date(item.date), 'yyyy-MM-dd');
          if(!dailyData[day]) dailyData[day] = 0;
          dailyData[day] += item.total;
      });
      return Object.entries(dailyData).map(([date, total]) => ({ date, total })).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [reportData]);
+  }, [transactions]);
 
   const orderStatusData = React.useMemo(() => {
     const statusCounts: Record<OrderStatus, number> = {
@@ -168,7 +200,7 @@ export default function ReportsPage() {
         <div>
           <h1 className="text-3xl font-headline font-bold tracking-tight">Reportes Financieros</h1>
           <p className="text-muted-foreground">
-            Filtrando datos.
+            Filtrando {transactions.length} transacciones.
           </p>
         </div>
         <div className="flex items-center gap-4">
@@ -201,16 +233,16 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
-                    <p className="text-xs text-muted-foreground">{completedOrders.length} órdenes cerradas</p>
+                    <p className="text-xs text-muted-foreground">{transactions.length} transacciones</p>
                 </CardContent>
             </Card>
              <Card>
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Ganancia Neta</CardTitle>
+                    <CardTitle className="text-sm font-medium">Ganancia Bruta</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="text-2xl font-bold text-green-600">${totalNetProfit.toFixed(2)}</div>
-                    <p className="text-xs text-muted-foreground">Después de costos</p>
+                    <p className="text-xs text-muted-foreground">Después de costos de productos</p>
                 </CardContent>
             </Card>
              <Card>
@@ -294,14 +326,15 @@ export default function ReportsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Detalle de Ventas</CardTitle>
+          <CardTitle>Detalle de Transacciones</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Fecha</TableHead>
-                <TableHead>Orden</TableHead>
+                <TableHead>ID</TableHead>
+                <TableHead>Tipo</TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-right text-destructive">Costo</TableHead>
@@ -309,15 +342,22 @@ export default function ReportsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {reportData.length > 0 ? (
-                reportData.map((item) => (
+              {transactions.length > 0 ? (
+                transactions.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>{format(new Date(item.date), 'dd/MM/yyyy')}</TableCell>
                     <TableCell className="font-medium">
-                       <OrderDetailsDialog order={item} client={clients.find(c => c.id === item.customerId)}>
+                      {item.type === 'Orden' ? (
+                          <OrderDetailsDialog order={item.originalDoc as Order} client={clients.find(c => c.id === (item.originalDoc as Order).customerId)}>
+                              <span className="text-primary hover:underline cursor-pointer">{item.id}</span>
+                          </OrderDetailsDialog>
+                      ) : (
+                         <SaleDetailsDialog sale={item.originalDoc as Sale} client={clients.find(c => c.id === (item.originalDoc as Sale).customerId)}>
                             <span className="text-primary hover:underline cursor-pointer">{item.id}</span>
-                        </OrderDetailsDialog>
+                         </SaleDetailsDialog>
+                      )}
                     </TableCell>
+                    <TableCell>{item.type}</TableCell>
                     <TableCell>{item.customerName}</TableCell>
                     <TableCell className="text-right">${item.total.toFixed(2)}</TableCell>
                     <TableCell className="text-right text-destructive">${item.cost.toFixed(2)}</TableCell>
@@ -326,19 +366,18 @@ export default function ReportsPage() {
                 ))
               ) : (
                 <TableRow>
-                    <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
-                        No se encontraron órdenes cerradas en este período. <br/>
-                        Asegúrate de cambiar el estado de las órdenes a "Entregada / Cerrada" para verlas aquí.
+                    <TableCell colSpan={7} className="text-center h-24 text-muted-foreground">
+                        No se encontraron transacciones cerradas en este período.
                     </TableCell>
                 </TableRow>
               )}
             </TableBody>
-            {reportData.length > 0 && (
+            {transactions.length > 0 && (
                 <TableFooter>
                     <TableRow className="bg-muted/50 font-bold">
-                        <TableCell colSpan={3}>Totales</TableCell>
+                        <TableCell colSpan={4}>Totales</TableCell>
                         <TableCell className="text-right">${totalRevenue.toFixed(2)}</TableCell>
-                        <TableCell className="text-right text-destructive">${reportData.reduce((acc, item) => acc + item.cost, 0).toFixed(2)}</TableCell>
+                        <TableCell className="text-right text-destructive">${transactions.reduce((acc, item) => acc + item.cost, 0).toFixed(2)}</TableCell>
                         <TableCell className="text-right text-green-600">${totalNetProfit.toFixed(2)}</TableCell>
                     </TableRow>
                 </TableFooter>
@@ -348,5 +387,7 @@ export default function ReportsPage() {
       </Card>
     </div>
   );
+
+    
 
     
