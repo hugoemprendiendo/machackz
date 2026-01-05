@@ -31,7 +31,6 @@ import { Combobox } from "@/components/ui/combobox";
 
 const orderFormSchema = z.object({
   customerId: z.string({ required_error: "Por favor selecciona un cliente." }).min(1, "Por favor selecciona un cliente."),
-  createdAt: z.string(),
   deviceType: z.string().min(2, "El tipo de dispositivo es requerido."),
   brand: z.string().min(2, "La marca es requerida."),
   deviceModel: z.string().min(2, "El modelo del dispositivo es requerido."),
@@ -63,7 +62,6 @@ export default function NewOrderPage() {
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
       customerId: searchParams.get('customerId') || "",
-      createdAt: format(new Date(), "yyyy-MM-dd"),
       deviceType: searchParams.get('deviceType') || "",
       brand: searchParams.get('brand') || "",
       deviceModel: searchParams.get('deviceModel') || "",
@@ -178,13 +176,10 @@ export default function NewOrderPage() {
   const onSubmit = async (data: OrderFormValues) => {
     const client = clients.find(c => c.id === data.customerId);
     if (!client) return;
-    
-    const localDate = new Date(data.createdAt + 'T00:00:00');
 
     const newOrderData = {
         customerId: data.customerId,
         customerName: client.name,
-        createdAt: localDate.toISOString(),
         contactInfo: client.phone,
         deviceType: data.deviceType,
         brand: data.brand,
@@ -203,11 +198,12 @@ export default function NewOrderPage() {
         diagnosis: data.diagnosis || 'Pendiente',
     };
     
-    await addOrder(newOrderData);
+    const newOrder = await addOrder(newOrderData);
 
     const tempOrderForPrint: Order = {
         ...newOrderData,
-        id: 'ORD-TMP',
+        createdAt: new Date().toISOString(),
+        id: newOrder.id,
         status: 'Abierta',
         parts: [],
     };
@@ -251,10 +247,10 @@ export default function NewOrderPage() {
         <form id="order-new-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
           <Card>
               <CardHeader>
-              <CardTitle>Cliente y Fecha</CardTitle>
-              <CardDescription>Selecciona el cliente y la fecha de creación.</CardDescription>
+              <CardTitle>Cliente</CardTitle>
+              <CardDescription>Selecciona el cliente para esta orden.</CardDescription>
               </CardHeader>
-              <CardContent className="grid md:grid-cols-2 gap-6">
+              <CardContent>
                   <div className="space-y-2">
                     <Label>Cliente</Label>
                     <Controller
@@ -285,11 +281,6 @@ export default function NewOrderPage() {
                             Crear Nuevo Cliente
                         </Button>
                     </NewClientDialog>
-                  </div>
-                   <div className="space-y-2">
-                    <Label>Fecha de Creación</Label>
-                     <Input id="createdAt" type="date" {...form.register("createdAt")} />
-                     {form.formState.errors.createdAt && <p className="text-sm text-destructive mt-2">{form.formState.errors.createdAt.message}</p>}
                   </div>
               </CardContent>
           </Card>

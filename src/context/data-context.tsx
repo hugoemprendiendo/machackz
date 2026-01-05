@@ -33,7 +33,7 @@ interface DataContextProps {
   addInventoryItem: (item: Omit<InventoryItem, 'id'>) => Promise<any>;
   updateInventoryItem: (item: InventoryItem) => Promise<void>;
   deleteInventoryItem: (itemId: string) => Promise<void>;
-  addOrder: (order: Omit<Order, 'id' | 'status' | 'parts'>) => Promise<any>;
+  addOrder: (order: Omit<Order, 'id' | 'status' | 'parts' | 'createdAt'>) => Promise<any>;
   updateOrderStatus: (orderId: string, status: OrderStatus, closedAt?: Date) => Promise<void>;
   updateOrderDetails: (orderId: string, details: { problemDescription?: string; diagnosis?: string; }) => Promise<void>;
   removePartFromOrder: (orderId: string, partToRemove: OrderPart) => Promise<void>;
@@ -232,12 +232,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     deleteDocumentNonBlocking(doc(firestore, "inventory", itemId));
   }, [firestore]);
   
-  const addOrder = useCallback(async (orderData: Omit<Order, 'id' | 'status' | 'parts'>) => {
+  const addOrder = useCallback(async (orderData: Omit<Order, 'id' | 'status' | 'parts' | 'createdAt'>) => {
     if (!ordersRef) return;
     const newOrder = {
         ...orderData,
         status: 'Abierta' as OrderStatus,
         parts: [],
+        createdAt: new Date().toISOString(),
     };
     return addDocumentNonBlocking(ordersRef, newOrder);
   }, [ordersRef]);
@@ -846,5 +847,3 @@ export const useDataContext = () => {
   }
   return context;
 };
-
-    
