@@ -152,12 +152,13 @@ export default function OrdersPage() {
     return [...orders].sort((a, b) => {
         let comparison = 0;
         if (sortKey === 'createdAt') {
+            // Consistent ascending comparison
             comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         } else { // customerName
             comparison = a.customerName.localeCompare(b.customerName);
         }
-
-        return sortDirection === 'asc' ? comparison : -comparison;
+        // Apply direction after comparison
+        return sortDirection === 'desc' ? -comparison : comparison;
     });
   }, [orders, sortKey, sortDirection]);
   
