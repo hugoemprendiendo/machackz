@@ -47,7 +47,7 @@ export default function SaleDetailPage() {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
-  const { sales, clients, settings, removeItemFromSale, updateSaleStatus, addMultiplePartsToOrder } = useDataContext();
+  const { sales, clients, removeItemFromSale, updateSaleStatus, addMultiplePartsToOrder } = useDataContext();
   
   const printRef = React.useRef<HTMLDivElement>(null);
   const [partToRemove, setPartToRemove] = React.useState<OrderPart | null>(null);
@@ -256,5 +256,3 @@ export default function SaleDetailPage() {
     </>
   );
 }
-
-    
