@@ -512,10 +512,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           itemId: product.id, name: product.name, quantity: item.quantity,
           unitPrice: product.sellingPrice, unitCost: 0, taxRate: product.taxRate, lotId: "SERVICE",
         };
-        const updatedParts = [...currentDoc.items, newPart];
+        
+        const existingItems = isSale ? (currentDoc as Sale).items : (currentDoc as Order).parts;
+        const updatedItems = [...existingItems, newPart];
         
         if (isSale) {
-            const { subtotal, taxTotal, total } = updatedParts.reduce((acc, part) => {
+            const { subtotal, taxTotal, total } = updatedItems.reduce((acc, part) => {
                 const partSubtotal = part.unitPrice * part.quantity;
                 const partTax = partSubtotal * (part.taxRate / 100);
                 acc.subtotal += partSubtotal;
@@ -523,9 +525,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 acc.total += partSubtotal + partTax;
                 return acc;
             }, { subtotal: 0, taxTotal: 0, total: 0 });
-            await updateDoc(docRef, { items: updatedParts, subtotal, taxTotal, total });
+            await updateDoc(docRef, { items: updatedItems, subtotal, taxTotal, total });
         } else {
-             await updateDoc(docRef, { parts: updatedParts });
+             await updateDoc(docRef, { parts: updatedItems });
         }
 
         toast({ title: "Servicio Añadido", description: `${item.quantity} x ${product.name} añadido(s).` });
@@ -574,7 +576,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     transaction.update(lotToUpdate.ref, { quantity: currentLot.quantity - lotToUpdate.consume });
                 }
                 
-                const updatedItems = [...currentData.items, ...newParts];
+                const existingItems = isSale ? (currentData as Sale).items : (currentData as Order).parts;
+                const updatedItems = [...existingItems, ...newParts];
+
                 if (isSale) {
                      const { subtotal, taxTotal, total } = updatedItems.reduce((acc, part) => {
                         const partSubtotal = part.unitPrice * part.quantity;
