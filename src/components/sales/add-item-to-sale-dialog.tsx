@@ -90,6 +90,13 @@ export function AddItemToSaleDialog({ open, onOpenChange, onAddItem, children }:
         }
         onOpenChange(open);
     };
+    
+    const handleDesglosarIva = () => {
+        const currentPrice = price;
+        if (currentPrice > 0) {
+            setPrice(parseFloat((currentPrice / 1.16).toFixed(2)));
+        }
+    };
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -153,7 +160,10 @@ export function AddItemToSaleDialog({ open, onOpenChange, onAddItem, children }:
                                 />
                             </div>
                             <div>
-                                <Label htmlFor="price">Precio Unit.</Label>
+                                <div className="flex justify-between items-center mb-1">
+                                    <Label htmlFor="price">Precio Unit.</Label>
+                                    <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={handleDesglosarIva}>Desglosar IVA</Button>
+                                </div>
                                 <Input
                                     id="price"
                                     type="number"
@@ -176,5 +186,3 @@ export function AddItemToSaleDialog({ open, onOpenChange, onAddItem, children }:
         </Dialog>
     )
 }
-
-    
