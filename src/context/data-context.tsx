@@ -577,7 +577,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
                 
                 const key = isSale ? 'items' : 'parts';
-                const existingItems = isSale ? (currentData as Sale).items : (currentData as Order).parts;
+                const existingItems = currentData[key] ? [...currentData[key]] : [];
                 const updatedItems = [...existingItems, ...newParts];
                 
 

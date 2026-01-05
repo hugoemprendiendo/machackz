@@ -94,7 +94,7 @@ export function AddItemToSaleDialog({ open, onOpenChange, onAddItem, children }:
     const handleDesglosarIva = () => {
         const currentPrice = price;
         if (currentPrice > 0) {
-            setPrice(parseFloat((currentPrice / 1.16).toFixed(2)));
+            setPrice(currentPrice / 1.16);
         }
     };
 
