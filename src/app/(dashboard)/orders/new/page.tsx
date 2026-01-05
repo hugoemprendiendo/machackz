@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Wand2, Loader2, ChevronLeft, PlusCircle, Calendar as CalendarIcon } from "lucide-react";
+import { Wand2, Loader2, ChevronLeft, PlusCircle } from "lucide-react";
 import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -28,14 +27,11 @@ import { OrderReceptionLayout } from "@/components/orders/order-reception-layout
 import { Order, Client } from "@/lib/types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { NewClientDialog } from "@/components/clients/new-client-dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { cn } from "@/lib/utils";
 import { Combobox } from "@/components/ui/combobox";
 
 const orderFormSchema = z.object({
   customerId: z.string({ required_error: "Por favor selecciona un cliente." }).min(1, "Por favor selecciona un cliente."),
-  createdAt: z.date(),
+  createdAt: z.string(),
   deviceType: z.string().min(2, "El tipo de dispositivo es requerido."),
   brand: z.string().min(2, "La marca es requerida."),
   deviceModel: z.string().min(2, "El modelo del dispositivo es requerido."),
@@ -67,7 +63,7 @@ export default function NewOrderPage() {
     resolver: zodResolver(orderFormSchema),
     defaultValues: {
       customerId: searchParams.get('customerId') || "",
-      createdAt: new Date(),
+      createdAt: format(new Date(), "yyyy-MM-dd"),
       deviceType: searchParams.get('deviceType') || "",
       brand: searchParams.get('brand') || "",
       deviceModel: searchParams.get('deviceModel') || "",
@@ -182,11 +178,13 @@ export default function NewOrderPage() {
   const onSubmit = async (data: OrderFormValues) => {
     const client = clients.find(c => c.id === data.customerId);
     if (!client) return;
+    
+    const localDate = new Date(data.createdAt + 'T00:00:00');
 
     const newOrderData = {
         customerId: data.customerId,
         customerName: client.name,
-        createdAt: data.createdAt.toISOString(),
+        createdAt: localDate.toISOString(),
         contactInfo: client.phone,
         deviceType: data.deviceType,
         brand: data.brand,
@@ -290,34 +288,7 @@ export default function NewOrderPage() {
                   </div>
                    <div className="space-y-2">
                     <Label>Fecha de Creación</Label>
-                     <Controller
-                        control={form.control}
-                        name="createdAt"
-                        render={({ field }) => (
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                        "w-full justify-start text-left font-normal",
-                                        !field.value && "text-muted-foreground"
-                                    )}
-                                    >
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {field.value ? format(field.value, "PPP") : <span>Elige una fecha</span>}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                    mode="single"
-                                    selected={field.value}
-                                    onSelect={field.onChange}
-                                    initialFocus
-                                    />
-                                </PopoverContent>
-                            </Popover>
-                        )}
-                    />
+                     <Input id="createdAt" type="date" {...form.register("createdAt")} />
                      {form.formState.errors.createdAt && <p className="text-sm text-destructive mt-2">{form.formState.errors.createdAt.message}</p>}
                   </div>
               </CardContent>

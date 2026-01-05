@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ChevronLeft, PlusCircle, Trash2, Calendar as CalendarIcon } from "lucide-react";
+import { ChevronLeft, PlusCircle, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useDataContext } from "@/context/data-context";
 import { Client, OrderPart } from "@/lib/types";
@@ -34,9 +35,6 @@ import {
 } from "@/components/ui/table";
 import { AddItemToSaleDialog } from "@/components/sales/add-item-to-sale-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { cn } from "@/lib/utils";
 
 const saleItemSchema = z.object({
   itemId: z.string(),
@@ -50,7 +48,7 @@ const saleItemSchema = z.object({
 
 const saleFormSchema = z.object({
   customerId: z.string().min(1, "Por favor selecciona un cliente."),
-  createdAt: z.date(),
+  createdAt: z.string(),
   items: z.array(saleItemSchema).min(1, "Debes añadir al menos un producto a la venta."),
 });
 
@@ -67,7 +65,7 @@ export default function NewSalePage() {
     resolver: zodResolver(saleFormSchema),
     defaultValues: {
       customerId: "",
-      createdAt: new Date(),
+      createdAt: format(new Date(), "yyyy-MM-dd"),
       items: [],
     },
   });
@@ -123,7 +121,7 @@ export default function NewSalePage() {
         customerName: customer.name,
         items: data.items,
         notes: '',
-        createdAt: data.createdAt,
+        createdAt: new Date(data.createdAt + 'T00:00:00'),
       });
       router.push("/sales");
     } catch (e) {
@@ -205,34 +203,8 @@ export default function NewSalePage() {
                 </div>
                 <div className="space-y-2">
                     <Label>Fecha de Venta</Label>
-                    <Controller
-                        control={form.control}
-                        name="createdAt"
-                        render={({ field }) => (
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                        "w-full justify-start text-left font-normal",
-                                        !field.value && "text-muted-foreground"
-                                    )}
-                                    >
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {field.value ? format(field.value, "PPP") : <span>Elige una fecha</span>}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                    mode="single"
-                                    selected={field.value}
-                                    onSelect={field.onChange}
-                                    initialFocus
-                                    />
-                                </PopoverContent>
-                            </Popover>
-                        )}
-                    />
+                    <Input id="createdAt" type="date" {...form.register("createdAt")} />
+                    {form.formState.errors.createdAt && <p className="text-sm text-destructive mt-2">{form.formState.errors.createdAt.message}</p>}
                 </div>
             </CardContent>
         </Card>

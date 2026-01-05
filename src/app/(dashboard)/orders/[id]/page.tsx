@@ -11,7 +11,6 @@ import {
   Pencil,
   Printer,
   CheckCircle,
-  Calendar as CalendarIcon,
   Trash2,
   Copy,
 } from "lucide-react";
@@ -52,8 +51,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { OrderPrintLayout } from "@/components/orders/order-print-layout";
 import { OrderReceptionLayout } from "@/components/orders/order-reception-layout";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
@@ -228,8 +225,8 @@ export default function OrderDetailPage() {
   const [problemDescription, setProblemDescription] = React.useState(order?.problemDescription || '');
   const [diagnosis, setDiagnosis] = React.useState(order?.diagnosis || '');
   const [selectedStatus, setSelectedStatus] = React.useState<OrderStatus | undefined>(order?.status);
-  const [closedAtDate, setClosedAtDate] = React.useState<Date | undefined>(
-    order?.closedAt ? parseISO(order.closedAt) : undefined
+  const [closedAtDate, setClosedAtDate] = React.useState<string>(
+    order?.closedAt ? format(parseISO(order.closedAt), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
   );
   const [partToRemove, setPartToRemove] = React.useState<OrderPart | null>(null);
 
@@ -249,15 +246,9 @@ export default function OrderDetailPage() {
         setProblemDescription(order.problemDescription);
         setDiagnosis(order.diagnosis);
         setSelectedStatus(order.status);
-        setClosedAtDate(order.closedAt ? parseISO(order.closedAt) : new Date());
+        setClosedAtDate(order.closedAt ? format(parseISO(order.closedAt), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
     }
   }, [order]);
-
-  React.useEffect(() => {
-    if (selectedStatus === 'Entregada / Cerrada' && !order?.closedAt) {
-      setClosedAtDate(new Date());
-    }
-  }, [selectedStatus, order?.closedAt]);
   
   const { partsSubtotal, taxTotal, total } = React.useMemo(() => {
     const subtotal = (order?.parts || []).reduce((sum, part) => sum + part.unitPrice * part.quantity, 0);
@@ -314,7 +305,7 @@ export default function OrderDetailPage() {
   
   const handleDeliverAndPrint = () => {
     if(order?.id){
-      updateOrderStatus(order.id, 'Entregada / Cerrada', new Date());
+      updateOrderStatus(order.id, 'Entregada / Cerrada', new Date(closedAtDate + 'T00:00:00'));
       toast({
           title: 'Orden Entregada',
           description: `La orden ${order.id} ha sido cerrada.`,
@@ -337,7 +328,7 @@ export default function OrderDetailPage() {
   
   const handleUpdateStatus = () => {
     if (selectedStatus) {
-        let closingDate = selectedStatus === 'Entregada / Cerrada' ? closedAtDate : undefined;
+        let closingDate = selectedStatus === 'Entregada / Cerrada' ? new Date(closedAtDate + 'T00:00:00') : undefined;
         updateOrderStatus(order.id, selectedStatus, closingDate);
         toast({
             title: 'Orden Actualizada',
@@ -466,8 +457,8 @@ export default function OrderDetailPage() {
                         <SelectTrigger><SelectValue placeholder="Selecciona un estado" /></SelectTrigger>
                         <SelectContent>{allOrderStatuses.map(status => (<SelectItem key={status} value={status}>{status}</SelectItem>))}</SelectContent>
                     </Select>
-                    {selectedStatus === 'Entregada / Cerrada' && (<div className="space-y-2"><Label>Fecha de Cierre</Label><Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !closedAtDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{closedAtDate ? format(closedAtDate, "PPP") : <span>Elige una fecha</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={closedAtDate} onSelect={setClosedAtDate} initialFocus /></PopoverContent></Popover></div>)}
-                    <Button size="sm" className="w-full" onClick={handleUpdateStatus} disabled={order.status === selectedStatus && (selectedStatus !== 'Entregada / Cerrada' || (order.closedAt && closedAtDate && parseISO(order.closedAt).getTime() === closedAtDate.getTime()))}>Actualizar Estado</Button>
+                    {selectedStatus === 'Entregada / Cerrada' && (<div className="space-y-2"><Label>Fecha de Cierre</Label><Input type="date" value={closedAtDate} onChange={(e) => setClosedAtDate(e.target.value)} /></div>)}
+                    <Button size="sm" className="w-full" onClick={handleUpdateStatus} disabled={order.status === selectedStatus && (selectedStatus !== 'Entregada / Cerrada' || (order.closedAt && closedAtDate && parseISO(order.closedAt).toISOString().slice(0,10) === closedAtDate))}>Actualizar Estado</Button>
                 </CardContent>
             </Card>
           </div>
@@ -477,5 +468,3 @@ export default function OrderDetailPage() {
     </>
   );
 }
-
-    

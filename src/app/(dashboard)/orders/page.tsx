@@ -3,7 +3,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { PlusCircle, File, Calendar as CalendarIcon, X } from "lucide-react";
+import { PlusCircle, File, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -27,9 +27,7 @@ import { useDataContext } from "@/context/data-context";
 import { Order, OrderStatus } from "@/lib/types";
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, startOfToday, subDays, parseISO } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DateRange } from "react-day-picker";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import { Input } from "@/components/ui/input";
 
 const statusColors: Record<OrderStatus, string> = {
     'Abierta': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
@@ -85,63 +83,62 @@ const OrdersTable = ({ orders }: { orders: Order[] }) => {
 
 export default function OrdersPage() {
   const { orders } = useDataContext();
-  const [date, setDate] = React.useState<DateRange | undefined>(undefined);
+  const [dateFrom, setDateFrom] = React.useState<string>('');
+  const [dateTo, setDateTo] = React.useState<string>('');
   const [filterPreset, setFilterPreset] = React.useState<string>('all');
 
   const handlePresetChange = (preset: string) => {
     setFilterPreset(preset);
     const now = new Date();
-    let from: Date | undefined = undefined;
-    let to: Date | undefined = undefined;
+    let from = '';
+    let to = '';
 
     switch (preset) {
         case 'today':
-            from = startOfToday();
-            to = endOfDay(now);
+            from = format(now, 'yyyy-MM-dd');
+            to = format(now, 'yyyy-MM-dd');
             break;
         case 'last7':
-            from = startOfDay(subDays(now, 6));
-            to = endOfDay(now);
+            from = format(subDays(now, 6), 'yyyy-MM-dd');
+            to = format(now, 'yyyy-MM-dd');
             break;
         case 'thisMonth':
-            from = startOfMonth(now);
-            to = endOfMonth(now);
+            from = format(startOfMonth(now), 'yyyy-MM-dd');
+            to = format(endOfMonth(now), 'yyyy-MM-dd');
             break;
         case 'lastMonth':
             const lastMonth = subMonths(now, 1);
-            from = startOfMonth(lastMonth);
-            to = endOfMonth(lastMonth);
+            from = format(startOfMonth(lastMonth), 'yyyy-MM-dd');
+            to = format(endOfMonth(lastMonth), 'yyyy-MM-dd');
             break;
         default:
-            from = undefined;
-            to = undefined;
+            from = '';
+            to = '';
     }
-    setDate({ from, to });
+    setDateFrom(from);
+    setDateTo(to);
   };
   
-  const handleDateChange = (newDate: DateRange | undefined) => {
-    setDate(newDate);
-    if(newDate?.from && newDate?.to) {
-      setFilterPreset('custom');
-    } else if (!newDate) {
-      setFilterPreset('all');
-    }
+  const clearDates = () => {
+    setDateFrom('');
+    setDateTo('');
+    setFilterPreset('all');
   }
 
   const sortedOrders = React.useMemo(() => [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), [orders]);
   
   const filteredOrders = React.useMemo(() => {
-    if (!date?.from) {
+    if (!dateFrom) {
       return sortedOrders;
     }
-    const from = startOfDay(date.from);
-    const to = date.to ? endOfDay(date.to) : endOfDay(date.from);
+    const from = startOfDay(new Date(dateFrom + 'T00:00:00'));
+    const to = endOfDay(new Date((dateTo || dateFrom) + 'T00:00:00'));
 
     return sortedOrders.filter(order => {
       const orderDate = new Date(order.createdAt);
       return orderDate >= from && orderDate <= to;
     });
-  }, [sortedOrders, date]);
+  }, [sortedOrders, dateFrom, dateTo]);
 
 
   const activeOrders = React.useMemo(() => {
@@ -190,47 +187,12 @@ export default function OrdersPage() {
                     <SelectItem value="last7">Últimos 7 días</SelectItem>
                     <SelectItem value="thisMonth">Este mes</SelectItem>
                     <SelectItem value="lastMonth">Mes pasado</SelectItem>
-                    <SelectItem value="custom" disabled>Personalizado</SelectItem>
                 </SelectContent>
             </Select>
-            <Popover>
-                <PopoverTrigger asChild>
-                    <Button
-                    id="date"
-                    variant={"outline"}
-                    className={cn(
-                        "w-[260px] justify-start text-left font-normal",
-                        !date && "text-muted-foreground"
-                    )}
-                    >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {date?.from ? (
-                        date.to ? (
-                        <>
-                            {format(date.from, "LLL dd, y")} -{" "}
-                            {format(date.to, "LLL dd, y")}
-                        </>
-                        ) : (
-                        format(date.from, "LLL dd, y")
-                        )
-                    ) : (
-                        <span>Selecciona un rango</span>
-                    )}
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
-                    <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={date?.from}
-                    selected={date}
-                    onSelect={handleDateChange}
-                    numberOfMonths={2}
-                    />
-                </PopoverContent>
-            </Popover>
-              {date && (
-                <Button variant="ghost" size="icon" onClick={() => handleDateChange(undefined)}>
+            <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setFilterPreset('custom'); }} className="w-[160px]"/>
+            <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-[160px]"/>
+              {dateFrom && (
+                <Button variant="ghost" size="icon" onClick={clearDates}>
                     <X className="h-4 w-4" />
                 </Button>
             )}
